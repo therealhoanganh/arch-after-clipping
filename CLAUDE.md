@@ -106,13 +106,21 @@ is the usual way a first Obsidian release silently fails. The tag must equal the
 public release; bump `manifest.json`, add a `CHANGELOG.md` entry and move the
 `— current` marker before cutting the next one.
 
-**Installed vaults are independent copies, not symlinks, and their versions have
-drifted.** As of 1.7.0 the vaults under `~/Downloads` carry 1.4.0, 1.6.0 and — in
-two of them — **5.2.0**, a leftover from the numbering used before the renumbering
-this changelog describes. Obsidian and BRAT compare version strings, so `5.2.0` is
-newer than anything this repo will ship: those two vaults will never be offered a
-1.x update and have to be removed and reinstalled to move across. Check what a
+**Distribution is BRAT, and the CHAOS vault is where it is installed and tested.**
+An installed plugin folder is an ordinary directory BRAT wrote, not a symlink back
+to this repo, so an edit here reaches no vault until a release is cut. Versions
+have drifted: as of 1.7.0 the vaults under `~/Downloads` carry 1.4.0, 1.6.0 and —
+in two of them — **5.2.0**, a leftover from the numbering used before the
+renumbering this changelog describes. Obsidian and BRAT compare version strings, so
+`5.2.0` is newer than anything this repo will ship: those two will never be offered
+a 1.x update and have to be removed and reinstalled to move across. Check what a
 vault actually reports before assuming a release reached it.
+
+**A changed default only reaches a vault that has no `data.json`.** Settings load as
+`Object.assign({}, DEFAULT_SETTINGS, saved)`, so any value the user has ever saved
+wins over a new default — including one they never deliberately chose, because the
+settings tab saves on every keystroke. Changing `DEFAULT_SETTINGS` is therefore a
+change for fresh installs; an existing vault needs the setting changed in the UI.
 
 Still outstanding:
 

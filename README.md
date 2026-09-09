@@ -67,6 +67,8 @@ Steps 4 and 6 have separate scopes, which is what the folder settings below are 
 
 That matches real posts and ignores profiles. The defaults already do this for Twitter/X and Instagram. If a site feels slow to clip, look in the console for `metadata done` followed by `no downloadable media` — that pairing means the host pattern is too broad.
 
+**The note can be flagged once media arrives.** *Mark the note as downloaded* names a property — `dl-ed` by default — set to `true` in the same write that adds `media`, and only after the files are on disk, so it never claims a download that failed. A note that already has the property keeps its position; a note without it gets it as its first property, since a status flag buried at the bottom of the block is easy to miss. Leave the setting empty to write nothing.
+
 **Image properties become `[[file.jpg]]`**, a plain wikilink, on `img`, `image`, `cover`, `thumbnail`, `banner` and `icon` by default. Any label the property carried is dropped rather than moved, because this plugin clips arbitrary sites and no single label fits them all.
 
 ## Transformers

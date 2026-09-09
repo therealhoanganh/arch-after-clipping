@@ -5,7 +5,23 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
-## 1.5.0 — current
+## 1.6.0 — current
+
+- **New setting: mark the note as downloaded.** A property — `dl-ed` by default —
+  is set to `true` alongside `media`, in the same frontmatter write, once the files
+  are on disk. It is written after the save rather than before it, so it cannot
+  claim a download that failed. Leave the setting empty to write nothing.
+- The reason it was needed: the YouTube clipping template carries `dl-ed: false`
+  and nothing was flipping it. This plugin never wrote the property, and ARCH YT
+  Playlists only writes it on notes it owns — which a Web Clipper note, carrying no
+  `yt-playlist` marker, is not. The field sat `false` forever in both plugins' blind
+  spot.
+- **A note without the property gets it as its first one.** Assigning a key that was
+  not already there appends it below every other property, which buries a status
+  flag at the bottom of the block. A note that already carries the property keeps
+  the position it had, so a template's own layout survives.
+
+## 1.5.0
 
 - **The transformer scripts now ship inside `main.js`.** A release delivers only
   `main.js`, `manifest.json` and `styles.css`, so the `transformers/` folder never

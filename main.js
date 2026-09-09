@@ -115,6 +115,8 @@ const DEFAULT_SETTINGS = {
   downloadVideo: true,
   askDownloadMode: true,
   defaultDownloadMode: 'video_and_audio',
+  // Written to the note once media is on disk. Empty writes nothing.
+  markDownloadedKey: 'dl-ed',
   ytDlpPath: 'yt-dlp',
   ffmpegLocation: '',
   videoLocationMode: 'specified', // vault | same | subfolder | specified
@@ -2214,6 +2216,27 @@ module.exports = class ClipArchiver extends Plugin {
         return `[[${link}]]`;
       });
       fm.media = values.length === 1 ? values[0] : values;
+
+      // A note clipped from the YouTube template carries dl-ed: false and
+      // nothing was ever flipping it: this plugin never wrote the property and
+      // ARCH YT Playlists only writes it on notes it owns, which a Web Clipper
+      // note is not. Set it here, where the files are already on disk, so the
+      // flag cannot claim a download that failed.
+      const doneKey = String(this.settings.markDownloadedKey || '').trim();
+      if (doneKey) {
+        const isNew = !Object.prototype.hasOwnProperty.call(fm, doneKey);
+        fm[doneKey] = true;
+        // Assigning a key that was not there appends it below everything else.
+        // A status flag is worth seeing first, so rebuild the block with it in
+        // front. A key that already existed keeps the position it had.
+        if (isNew) {
+          const rest = {};
+          for (const k of Object.keys(fm)) if (k !== doneKey) rest[k] = fm[k];
+          for (const k of Object.keys(fm)) delete fm[k];
+          fm[doneKey] = true;
+          Object.assign(fm, rest);
+        }
+      }
     });
   }
 
@@ -3833,6 +3856,23 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           s.downloadVideo = v;
           await this.save();
         })
+      );
+
+    new Setting(containerEl)
+      .setName('Mark the note as downloaded')
+      .setDesc(
+        'A property set to true alongside media, once the files are on disk — so it never claims a download that failed. ' +
+          'A note that already has the property keeps its position; one that does not gets it as its first property. ' +
+          'Leave this empty to write nothing.'
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder('dl-ed')
+          .setValue(s.markDownloadedKey)
+          .onChange(async (v) => {
+            s.markDownloadedKey = v.trim();
+            await this.save();
+          })
       );
 
     new Setting(containerEl)

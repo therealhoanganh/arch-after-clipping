@@ -27,6 +27,10 @@ const HTML_IMG_RE = /<img\s[^>]*\bsrc=(?:"(https?:\/\/[^"]+)"|'(https?:\/\/[^']+
 const BARE_URL_RE = /https?:\/\/[^\s)\]>"'`]+/;
 
 // Below this, it is almost certainly a tracking pixel or a spacer.
+// Written into notes before 1.0.0 and never since. Still read, so a note that
+// already has its media is not downloaded again.
+const LEGACY_DONE_KEY = 'archived';
+
 const MIN_IMAGE_BYTES = 1024;
 const IMAGE_CONCURRENCY = 3;
 const HTTP_TIMEOUT_MS = 20000;
@@ -74,12 +78,11 @@ const DEFAULT_SETTINGS = {
   // --- scope -------------------------------------------------------
   watchAllFolders: true,
   clipFolders: [],
-  excludeFolders: ['Templates'],
+  excludeFolders: ['_'],
   graceSeconds: 120, // a "create" event for a file older than this is the vault re-index, not a clip
 
   // --- shared ------------------------------------------------------
   frontmatterUrlKeys: ['url', 'source', 'link', 'permalink', 'original-url'],
-  processedKey: 'archived',
   // Notes carrying any of these properties belong to another ARCH plugin and are
   // left alone. Editable, so a new marker needs no code change.
   skipOtherArchNotes: true,
@@ -94,9 +97,9 @@ const DEFAULT_SETTINGS = {
   // is how clipFolders already behaves.
   imageFolders: [],
   // Mirrors Obsidian's own "Default location for new attachments" choices.
-  imageLocationMode: 'obsidian', // obsidian | vault | same | subfolder | specified
+  imageLocationMode: 'specified', // obsidian | vault | same | subfolder | specified
   imageSubfolder: 'attachments',
-  imageFolder: '',
+  imageFolder: 'YouTube/Images',
   imageNameTemplate: '{{notename}} {{index}}',
   rewriteFrontmatterImages: true,
   frontmatterImageKeys: ['img', 'image', 'cover', 'thumbnail', 'banner', 'icon'],
@@ -121,7 +124,7 @@ const DEFAULT_SETTINGS = {
   ffmpegLocation: '',
   videoLocationMode: 'specified', // vault | same | subfolder | specified
   videoSubfolder: 'media',
-  videoFolder: '',
+  videoFolder: 'YouTube/Medias',
   quality: 'bestvideo*+bestaudio/best',
   audioFormat: 'mp3',
   cookiesFromBrowser: '',
@@ -142,6 +145,9 @@ const DEFAULT_SETTINGS = {
   // --- subtitles -------------------------------------------------
   downloadSubtitles: true,
   subtitleLangs: 'en.*',
+  // 'en.*' matches en, en-US, en-GB and en-orig, so yt-dlp writes one file
+  // per variant. Keep the best and delete the rest.
+  keepOneSubtitle: true,
 
   setupDone: false,
 };
@@ -637,9 +643,16 @@ module.exports = class ClipArchiver extends Plugin {
         this.resolveSourceUrl(fm) || this.extractUrlFromRawFrontmatter(content);
       const alreadyDone =
         this.wasProcessed(earlyUrl || file.path) ||
-        // notes archived before 2.0 still carry the property
-        (fm && fm[this.settings.processedKey] === true) ||
-        this.rawFlagIsTrue(content, this.settings.processedKey);
+        // The same property the media step writes: a note that says it has been
+        // downloaded is not downloaded again.
+        (fm && fm[this.settings.markDownloadedKey] === true) ||
+        this.rawFlagIsTrue(content, this.settings.markDownloadedKey) ||
+        // Notes clipped before 1.0.0 carry 'archived' instead. The setting that
+        // named it is gone, but the property is still honoured: re-downloading
+        // media for a note that already has its files is the one thing the
+        // marker exists to prevent.
+        (fm && fm[LEGACY_DONE_KEY] === true) ||
+        this.rawFlagIsTrue(content, LEGACY_DONE_KEY);
       // Two sources, because either one can lag behind a note created a moment ago.
       const fromCache = this.resolveSourceUrl(fm);
       const fromRaw = this.extractUrlFromRawFrontmatter(content);
@@ -924,13 +937,14 @@ module.exports = class ClipArchiver extends Plugin {
     this.settings.processedUrls = this.settings.processedUrls.filter((k) => !keys.includes(k));
     const removed = before - this.settings.processedUrls.length;
 
-    // A note archived by an older build carries the property instead, which
-    // would keep blocking it even with the URL cleared.
+    // The downloaded marker blocks the note on its own, so clearing the URL
+    // without clearing the property would leave it stuck.
     let hadFlag = false;
-    if (fm && fm[this.settings.processedKey] === true) {
+    const doneKeys = [this.settings.markDownloadedKey, LEGACY_DONE_KEY].filter(Boolean);
+    if (fm && doneKeys.some((k) => fm[k] === true)) {
       hadFlag = true;
       await this.setFrontmatter(file, (f) => {
-        delete f[this.settings.processedKey];
+        for (const k of doneKeys) delete f[k];
       });
     }
 
@@ -1643,7 +1657,14 @@ module.exports = class ClipArchiver extends Plugin {
         );
       }
       const r = await this.ytDlpWithFallback(args, url, 'video', notice);
-      if (r.ok) saved.push(...r.files);
+      if (r.ok) {
+        saved.push(...r.files);
+        if (this.settings.downloadSubtitles && this.settings.keepOneSubtitle) {
+          // The stem yt-dlp actually wrote: mediaOutputTemplate doubles % for
+          // yt-dlp's own templating, and yt-dlp writes it back as a single %.
+          this.pruneSubtitles(folder, sanitizeName(file.basename));
+        }
+      }
       return r;
     };
 
@@ -1765,6 +1786,54 @@ module.exports = class ClipArchiver extends Plugin {
 
   // The audio is already inside the file we just downloaded, so pulling it out
   // locally beats fetching the same stream from YouTube a second time.
+  // yt-dlp writes one subtitle file per matched language tag, so a --sub-langs
+  // of 'en.*' leaves en.vtt, en-US.vtt, en-GB.vtt and en-orig.vtt side by side
+  // for a single video. Ported from ARCH YT Playlists, which hit this first.
+  // Only files matching the video's own stem are considered, so a subtitle a
+  // user put in the folder by hand is never touched.
+  pruneSubtitles(folder, stem) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(folder);
+    } catch (_) {
+      return null;
+    }
+    const esc = stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const shape = new RegExp(`^${esc}\\.([A-Za-z0-9_-]+)\\.(vtt|srt|ass)$`, 'i');
+
+    const found = [];
+    for (const name of entries) {
+      const m = name.match(shape);
+      if (m) found.push({ name, lang: m[1], ext: m[2].toLowerCase() });
+    }
+    if (found.length < 2) return found[0] ? path.join(folder, found[0].name) : null;
+
+    found.sort((a, b) => this.subtitleRank(a) - this.subtitleRank(b) || a.lang.localeCompare(b.lang));
+    const keep = found[0];
+    let removed = 0;
+    for (const f of found.slice(1)) {
+      try {
+        fs.unlinkSync(path.join(folder, f.name));
+        removed++;
+      } catch (_) {
+        /* leave it rather than fail the download over a subtitle */
+      }
+    }
+    this.log(`subtitles: kept ${keep.lang}, removed ${removed} other track(s)`);
+    return path.join(folder, keep.name);
+  }
+
+  // Lower sorts first. A plain language code beats a regional variant, and the
+  // original-language track beats an auto-translation of it.
+  subtitleRank(f) {
+    const lang = f.lang.toLowerCase();
+    const base = (this.settings.subtitleLangs || 'en').replace(/[.*].*$/, '').toLowerCase() || 'en';
+    if (lang === base) return 0;
+    if (lang === `${base}-orig`) return 1;
+    if (lang.startsWith(`${base}-`)) return 2;
+    return 3;
+  }
+
   async extractAudioFrom(videoPath, folder) {
     const format = this.settings.audioFormat || 'mp3';
     const stem = path.basename(videoPath, path.extname(videoPath));
@@ -2323,9 +2392,9 @@ module.exports = class ClipArchiver extends Plugin {
     }
 
     lines.push(
-      `Already archived: ${
-        (fm && fm[this.settings.processedKey] === true) ||
-        this.rawFlagIsTrue(content, this.settings.processedKey)
+      `Already downloaded: ${
+        (fm && fm[this.settings.markDownloadedKey] === true) ||
+        this.rawFlagIsTrue(content, this.settings.markDownloadedKey)
           ? 'yes'
           : 'no'
       }`
@@ -3619,16 +3688,6 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(containerEl)
-      .setName('Done marker property')
-      .setDesc('Only read, never written. Notes archived before version 2.0 carry it; new ones are tracked inside the plugin instead so nothing is added to your frontmatter.')
-      .addText((t) =>
-        t.setValue(s.processedKey).onChange(async (v) => {
-          s.processedKey = v.trim() || 'archived';
-          await this.save();
-        })
-      );
-
     /* ---- images ---- */
     new Setting(containerEl).setName('Images').setHeading();
 
@@ -4152,6 +4211,20 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       .addText((t) =>
         t.setValue(s.subtitleLangs).onChange(async (v) => {
           s.subtitleLangs = v.trim() || 'en.*';
+          await this.save();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName('Keep only one subtitle file')
+      .setDesc(
+        'A language pattern like "en.*" matches en, en-US, en-GB and en-orig, so yt-dlp writes a separate file for each. ' +
+          'This keeps the closest match to the language you asked for and deletes the rest, considering only files named after the video itself. ' +
+          'Turn it off to keep every track.'
+      )
+      .addToggle((t) =>
+        t.setValue(s.keepOneSubtitle).onChange(async (v) => {
+          s.keepOneSubtitle = v;
           await this.save();
         })
       );

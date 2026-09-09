@@ -57,7 +57,9 @@ Steps 4 and 6 have separate scopes, which is what the folder settings below are 
 
 **Images have their own folder list, separate from media.** *Download images only in these folders* scopes the image pass alone — video still downloads anywhere the plugin runs. Empty means everywhere.
 
-**Save locations** offer the same choices as Obsidian's own attachment setting: vault folder, same folder as the note, a subfolder under it, or a path you name. Images get a fifth, *follow Obsidian's attachment setting*, which is the default.
+**Save locations** offer the same choices as Obsidian's own attachment setting: vault folder, same folder as the note, a subfolder under it, or a path you name. Images get a fifth, *follow Obsidian's attachment setting*. Out of the box media is saved to `YouTube/Medias` and images to `YouTube/Images`, both as named folders.
+
+**Only one subtitle file is kept.** A language pattern like `en.*` matches `en`, `en-US`, `en-GB` and `en-orig`, so yt-dlp writes a separate file for each and you end up with four tracks for one video. *Keep only one subtitle file* keeps the closest match to what you asked for — a plain code beats the original-language track, which beats a regional variant — and deletes the rest. Only files named after the video itself are considered, so a subtitle you put in the folder by hand is never touched.
 
 **Media hosts accept regular expressions.** This is the least obvious setting and the most worth understanding. A bare domain like `x.com` matches *every* URL on that domain, including profile pages with no video on them — and each one costs a full `yt-dlp` round trip, several seconds, to discover there is nothing there. Wrap an entry in slashes and it compiles as a regex instead:
 
@@ -99,7 +101,7 @@ Add your own by dropping a `.py` file into `transformers/` and adding a rule tha
 
 ## Things that will surprise you
 
-**A page is only auto-processed once.** The record is keyed on the URL, not the note path, so re-clipping the same page — anywhere, under any name — skips the download. That is deliberate: it stops large files being fetched twice. Images and the transformer still re-run. **Forget this note** clears it.
+**A page is only auto-processed once.** The record is keyed on the URL, not the note path, so re-clipping the same page — anywhere, under any name — skips the download. That is deliberate: it stops large files being fetched twice. Images and the transformer still re-run. A note whose `dl-ed` property is already `true` is skipped the same way, so the one property both records the download and prevents a repeat. **Forget this note** clears both.
 
 **Notes carrying a `yt-playlist` property are left alone**, because they belong to ARCH YT Playlists. Without this the two plugins fight over the same notes.
 

@@ -5,7 +5,32 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
-## 1.6.0 — current
+## 1.7.0 — current
+
+- **Only one subtitle file is kept per download.** `--sub-langs en.*` matches `en`,
+  `en-US`, `en-GB` and `en-orig`, so yt-dlp wrote a separate file for each and a
+  single video ended up with four tracks beside it. The closest match to the
+  requested language is kept — a plain code, then the original-language track, then
+  a regional variant — and the rest are deleted. `pruneSubtitles` is ported from
+  ARCH YT Playlists, which hit this first. Only files named after the video itself
+  are considered, so a subtitle put in the folder by hand is never touched, and a
+  failure to delete one is logged rather than failing the download. The new *Keep
+  only one subtitle file* setting turns it off.
+- **New defaults for where things are saved.** Media now goes to `YouTube/Medias`
+  and images to `YouTube/Images`. Images previously followed Obsidian's own
+  attachment setting.
+- **The separate `archived` done marker is gone.** It had not been written into
+  notes since 1.0.0 and was only read, which left two properties meaning almost the
+  same thing. The skip check now reads `dl-ed`, the property the media step already
+  writes, so one property both records a download and prevents a repeat. **Forget
+  this note** clears that property along with the URL record. Diagnose reports
+  *Already downloaded* rather than *Already archived*. Notes clipped before 1.0.0
+  carry `archived` and are still honoured — the setting is gone, the property is
+  not, because re-downloading media for a note that already has its files is the
+  one thing the marker exists to prevent.
+- **The default ignored folder is `_` rather than `Templates`.**
+
+## 1.6.0
 
 - **New setting: mark the note as downloaded.** A property — `dl-ed` by default —
   is set to `true` alongside `media`, in the same frontmatter write, once the files

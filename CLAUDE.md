@@ -142,3 +142,20 @@ Two specific traps, both of which have already caused bugs:
 - **A clean test run is not evidence.** The mock has now missed five real Obsidian
   APIs: `_children`, `register`, `registerMarkdownPostProcessor`, `Modal.open`, and
   `registerEvent`. It catches logic bugs and nothing else.
+## Coupling to ARCH X Archive
+
+ARCH X Archive writes hundreds of notes carrying a `url` that points at
+`x.com/<user>/status/<id>`, which is exactly the shape this plugin exists to
+process. On its first run it took every one of them, ran a full yt-dlp metadata
+probe — about **three seconds per note** — and downloaded a video and an mp3 into
+the profile's folder. At that plugin's intended scale, a few hundred profiles,
+that is tens of thousands of probes nobody asked for.
+
+`otherArchKeys` now defaults to `['yt-playlist', 'dl-all', 'x-author', 'x-name']`.
+`x-author` and `x-name` are on **both** of ARCH X Archive's note types, which is
+why two keys are enough there.
+
+A saved `otherArchKeys` shadows the default entirely, so `loadSettings` appends
+any missing default markers to a saved list rather than replacing it — a vault
+configured before ARCH X Archive existed would otherwise keep probing. A key the
+user added by hand survives that.

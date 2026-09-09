@@ -86,7 +86,7 @@ const DEFAULT_SETTINGS = {
   // Notes carrying any of these properties belong to another ARCH plugin and are
   // left alone. Editable, so a new marker needs no code change.
   skipOtherArchNotes: true,
-  otherArchKeys: ['yt-playlist', 'dl-all'],
+  otherArchKeys: ['yt-playlist', 'dl-all', 'x-author', 'x-name'],
   processedUrls: [],
   duplicateAction: 'warn', // warn | ignore
 
@@ -688,14 +688,21 @@ module.exports = class ClipArchiver extends Plugin {
         }
       }
 
-      // Two markers, because the two note types carry different ones: a video
-      // note has yt-playlist, a playlist note has dl-all. Checking only the
-      // first meant playlist notes were still being renamed on every sync.
-      const ownedByYtPlaylists = (this.settings.otherArchKeys || []).some(
+      // Several markers, because each plugin's note types carry different ones.
+      // ARCH YT Playlists: yt-playlist on a video note, dl-all on a playlist
+      // note -- checking only the first meant playlist notes were still being
+      // renamed on every sync.
+      //
+      // ARCH X Archive: x-author and x-name, on both its note types. Without
+      // these, every X post note got a full yt-dlp metadata probe -- about three
+      // seconds each -- and media downloaded into the profile folder. At that
+      // plugin's intended scale, a few hundred profiles, that is tens of
+      // thousands of probes nobody asked for.
+      const ownedByOtherArch = (this.settings.otherArchKeys || []).some(
         (key) => (fm && fm[key] !== undefined) || this.rawHasKey(content, key)
       );
-      if (!manual && this.settings.skipOtherArchNotes && ownedByYtPlaylists) {
-        this.log('owned by ARCH YT Playlists, leaving it alone:', file.path);
+      if (!manual && this.settings.skipOtherArchNotes && ownedByOtherArch) {
+        this.log('owned by another ARCH plugin, leaving it alone:', file.path);
         return;
       }
 
@@ -3149,6 +3156,15 @@ module.exports = class ClipArchiver extends Plugin {
     if (Array.isArray(saved.clipFolders) && saved.watchAllFolders === undefined) {
       saved.watchAllFolders = false;
     }
+    // A saved otherArchKeys list shadows the default entirely, so a vault that
+    // configured this before ARCH X Archive existed would keep probing every X
+    // note with yt-dlp. Missing markers are appended rather than the list being
+    // replaced, so a hand-added key of the user's own survives.
+    if (Array.isArray(saved.otherArchKeys)) {
+      for (const key of DEFAULT_SETTINGS.otherArchKeys) {
+        if (!saved.otherArchKeys.includes(key)) saved.otherArchKeys.push(key);
+      }
+    }
     // Migrate the single URL property name into the candidate list, keeping it first.
     if (saved.frontmatterUrlKey && !saved.frontmatterUrlKeys) {
       const rest = DEFAULT_SETTINGS.frontmatterUrlKeys.filter((k) => k !== saved.frontmatterUrlKey);
@@ -3704,7 +3720,8 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       .setName('Leave notes owned by another ARCH plugin alone')
       .setDesc(
         'Comma-separated property names. A note carrying any of them is skipped by the automatic pass. ' +
-          'ARCH YT Playlists writes yt-playlist on video notes and dl-all on playlist notes. ' +
+          'ARCH YT Playlists writes yt-playlist on video notes and dl-all on playlist notes; ' +
+          'ARCH X Archive writes x-author and x-name on both of its note types. ' +
           'Commands run by hand still work on those notes.'
       )
       .addText((t) =>

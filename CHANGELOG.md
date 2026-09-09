@@ -5,6 +5,19 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
+
+## Unreleased
+
+- **ARCH X Archive notes are now left alone.** `otherArchKeys` gains `x-author`
+  and `x-name`, which that plugin writes on both its note types. Without them
+  every archived X post got a full yt-dlp metadata probe, about three seconds
+  each, and media downloaded into the profile folder — tens of thousands of
+  probes at a few hundred profiles.
+- A saved `otherArchKeys` list no longer shadows new markers: missing defaults
+  are appended on load rather than the list being replaced, so a vault
+  configured before ARCH X Archive existed is fixed without editing the setting
+  by hand. Keys added by hand survive.
+
 ## 1.7.0 — current
 
 - **Only one subtitle file is kept per download.** `--sub-langs en.*` matches `en`,

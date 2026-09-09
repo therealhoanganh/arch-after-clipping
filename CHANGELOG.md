@@ -12,8 +12,6 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 ## 1.3.0
 
-## 1.3.0
-
 Fixes a data-loss default.
 
 - **Duplicate handling no longer trashes anything by default.** `duplicateAction` defaulted to `trash`, which moved a newly created note to trash whenever its `url` matched an existing note's. The trigger is Obsidian's `create` event, which fires for *every* new file, so a note written or saved by hand was indistinguishable from a second Web Clipper clip — and got trashed. The default is now `warn`: both notes are kept and a notice names the other one.
@@ -23,17 +21,11 @@ Fixes a data-loss default.
 
 ## 1.2.0
 
-## 1.2.0
-
 - **The ownership markers are a setting.** *Leave notes owned by another ARCH plugin alone* holds the property names — `yt-playlist` and `dl-all` by default. Adding a marker no longer needs a code change on this side.
 
 ## 1.1.0
 
-## 1.1.0
-
 - **Playlist notes are recognised as ARCH YT Playlists' too.** 1.0.0 checked only for a `yt-playlist` property, which video notes carry and playlist notes do not — so playlist notes were still renamed on every sync. `dl-all` is now accepted as a second ownership marker.
-
-## 1.0.0
 
 ## 1.0.0
 

@@ -83,11 +83,16 @@ a cache-only version of this check never fired once.
 
 ## Before publishing
 
-- `manifest.json` and `LICENSE` still contain `AUTHOR_NAME`; the manifest also has
-  `AUTHOR_HANDLE`.
+The author placeholders are filled in: `manifest.json` and `LICENSE` carry
+`Hoang Anh`, and the manifest's `authorUrl` points at `therealhoanganh`. The repo
+is public at `therealhoanganh/arch-after-clipping`.
+
+What is left blocks the **release**, not the repo:
+
 - Distribution delivers only `main.js`, `manifest.json` and `styles.css`. The
   `transformers/*.py` files **would not arrive**. They need embedding in `main.js`
-  and writing to disk on first run.
+  and writing to disk on first run. Until that is done, a BRAT install into another
+  vault lands a plugin whose transform step has nothing to run.
 - Network use and reading Chrome's cookie store must be disclosed in the README if
   this ever goes to the community store.
 

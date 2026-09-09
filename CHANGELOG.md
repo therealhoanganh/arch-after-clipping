@@ -46,7 +46,7 @@ Fixes a data-loss default.
 
 ## 1.0.0
 
-First public release. The entries below record how it got here.
+The first version meant for anyone other than its author. It was never published — `1.5.0` is the first public release. The entries below record how it got here.
 
 - **The ARCH YT Playlists ownership check now works.**
 

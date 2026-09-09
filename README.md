@@ -11,7 +11,7 @@ Web Clipper saves a page's text and leaves everything else pointing at the inter
 
 It runs on every site, not just YouTube. `yt-dlp` covers around a thousand of them.
 
-> **Status:** works, and has been used daily — but on one machine: macOS on Intel, Obsidian 1.13.4. Windows and Linux are untested, and the parts most likely to break there are browser cookie access and the paths to `yt-dlp` and `ffmpeg`. Read 1.0.0 as "known to work for its author".
+> **Status:** works, and has been used daily — but on one machine: macOS on Intel, Obsidian 1.13.4. Windows and Linux are untested, and the parts most likely to break there are browser cookie access and the paths to `yt-dlp` and `ffmpeg`. `1.5.0` is the first public release; everything before it was development on that one machine, so read the history as "known to work for its author".
 
 ## Requirements
 
@@ -28,9 +28,19 @@ Run **Diagnose** from the command palette after installing. It reports what it f
 
 ## Install
 
-There is no community-store listing. Download the release zip, extract it into `YourVault/.obsidian/plugins/`, and enable **ARCH After Clipping** under Settings → Community plugins. The folder must keep the name `arch-after-clipping`.
+There is no community-store listing, so there are two ways in.
 
-To upgrade, replace `main.js` and `manifest.json` only — your settings survive. Replacing the whole folder wipes `data.json`, which holds your settings *and* the record of what has already been downloaded.
+**With BRAT**, which also handles updates. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) from the community store, run *BRAT: Add a beta plugin for testing* from the command palette, and give it:
+
+```
+therealhoanganh/arch-after-clipping
+```
+
+Then enable **ARCH After Clipping** under Settings → Community plugins. BRAT pulls each new release as it appears.
+
+**By hand.** Download `main.js` and `manifest.json` from the [latest release](https://github.com/therealhoanganh/arch-after-clipping/releases/latest) into `YourVault/.obsidian/plugins/arch-after-clipping/`, then enable it the same way. The folder must keep the name `arch-after-clipping`.
+
+To upgrade by hand, replace `main.js` and `manifest.json` only — your settings survive. Replacing the whole folder wipes `data.json`, which holds your settings *and* the record of what has already been downloaded.
 
 ## How a clip gets processed
 

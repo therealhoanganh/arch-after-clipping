@@ -68,6 +68,8 @@ Two ship with the plugin:
 - **`gemini_chat.py`** turns a Gemini conversation into numbered prompt/answer callouts.
 - **`reddit_thread.py`** turns a thread into nested comment callouts. *This one has never been run against a real clip.*
 
+Both are embedded in `main.js` and written into `transformers/` when the plugin loads, since a release only delivers `main.js` and `manifest.json`. A file already sitting there is never overwritten, so edits you make to them survive an update — run **Restore the bundled transformer scripts** if you want the shipped versions back. Your own scripts in that folder are left alone regardless.
+
 Add your own by dropping a `.py` file into `transformers/` and adding a rule that matches a URL pattern.
 
 ## Commands
@@ -80,6 +82,7 @@ Add your own by dropping a `.py` file into `transformers/` and adding a rule tha
 | Download media for this note | video and audio only |
 | Embed the downloaded media in this note | inserts the `![[file]]` embed |
 | Forget this note | clears it from the processed record so it can be archived again |
+| Restore the bundled transformer scripts | rewrites `gemini_chat.py` and `reddit_thread.py` from the copies inside `main.js` |
 | Diagnose | reports tool paths, runtimes, and what the plugin sees in the current note |
 
 ## Things that will surprise you

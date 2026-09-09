@@ -5,7 +5,24 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
-## 1.4.0 — current
+## 1.5.0 — current
+
+- **The transformer scripts now ship inside `main.js`.** A release delivers only
+  `main.js`, `manifest.json` and `styles.css`, so the `transformers/` folder never
+  reached an installed vault. Every install that was not a copy of the repository
+  folder — which is every BRAT install — had two transform rules enabled by
+  default, for Gemini and Reddit, both pointing at files that were not there. The
+  scripts are now embedded and written to `transformers/` on load.
+- **A copy already on disk is never overwritten.** If the file exists it is left
+  exactly as it is, because it may be one you edited, and your own scripts in that
+  folder are untouched regardless of name.
+- **New command: Restore the bundled transformer scripts.** Overwrites the two
+  bundled files with the versions inside `main.js`. This is the only way a fix to a
+  shipped script reaches a vault whose copy is stale, since load never overwrites.
+- Failing to create or write the folder is logged and skipped rather than thrown,
+  so a read-only plugin folder cannot stop the plugin from loading.
+
+## 1.4.0
 
 - **The duplicate-trashing option is gone.** Not made safer — removed. Its stated reason was that a second clip "downloads the video twice", and the processed-URL record already prevents that, keyed on URL, whether or not a duplicate note exists. So it was solving a solved problem using the only irreversible action in the plugin. A duplicate note is visible in the file list and takes a second to delete by hand; duplicate *media* is the thing that is hard to notice, and that is handled by image hashing and the record. The setting is now **Tell me** or **Do nothing**, and a saved `trash` value migrates to the former.
 - After this, nothing in either plugin deletes a note. The only remaining deletion touching your folders is subtitle pruning in ARCH YT Playlists, which removes only tracks it downloaded seconds earlier and can be turned off.

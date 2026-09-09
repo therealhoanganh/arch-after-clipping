@@ -87,12 +87,22 @@ The author placeholders are filled in: `manifest.json` and `LICENSE` carry
 `Hoang Anh`, and the manifest's `authorUrl` points at `therealhoanganh`. The repo
 is public at `therealhoanganh/arch-after-clipping`.
 
-What is left blocks the **release**, not the repo:
+Distribution delivers only `main.js`, `manifest.json` and `styles.css`, so the
+`transformers/*.py` files would not arrive on their own. As of 1.5.0 they are
+embedded in `main.js` as `BUNDLED_TRANSFORMERS` and written to disk by
+`ensureTransformers()` on load, which never overwrites a file that already exists
+— the **Restore the bundled transformer scripts** command is the way to force it.
 
-- Distribution delivers only `main.js`, `manifest.json` and `styles.css`. The
-  `transformers/*.py` files **would not arrive**. They need embedding in `main.js`
-  and writing to disk on first run. Until that is done, a BRAT install into another
-  vault lands a plugin whose transform step has nothing to run.
+**The embedded copies and the `.py` files in `transformers/` are kept in sync by
+hand, and nothing checks them.** Edit the `.py` file and the string in `main.js`
+together, or the repository and every installed vault quietly disagree about what
+a transformer does. There is no build step in this project to catch it.
+
+Still outstanding:
+
+- No release exists yet. BRAT installs from release *assets*, not from the branch,
+  so the tag must be exactly `1.5.0` — no `v` prefix — with `main.js` and
+  `manifest.json` attached as assets rather than only present in the source zip.
 - Network use and reading Chrome's cookie store must be disclosed in the README if
   this ever goes to the community store.
 

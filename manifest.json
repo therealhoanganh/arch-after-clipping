@@ -1,7 +1,7 @@
 {
   "id": "arch-after-clipping",
   "name": "ARCH After Clipping",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "minAppVersion": "1.6.0",
   "description": "Finishes what Web Clipper starts: saves a clipped page's images into the vault, repoints its links and image properties at them, runs a per-site script over the body, and downloads the video or audio with yt-dlp.",
   "author": "Hoang Anh",

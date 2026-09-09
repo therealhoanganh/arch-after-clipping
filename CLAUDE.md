@@ -98,11 +98,16 @@ hand, and nothing checks them.** Edit the `.py` file and the string in `main.js`
 together, or the repository and every installed vault quietly disagree about what
 a transformer does. There is no build step in this project to catch it.
 
+Releases are cut with `gh release create <version> main.js manifest.json`. BRAT
+installs from release **assets**, not from the branch, so both files have to be
+attached — being present in the auto-generated source zip is not enough, and that
+is the usual way a first Obsidian release silently fails. The tag must equal the
+`version` in `manifest.json` exactly, with no `v` prefix. `1.5.0` is the first
+public release; bump `manifest.json`, add a `CHANGELOG.md` entry and move the
+`— current` marker before cutting the next one.
+
 Still outstanding:
 
-- No release exists yet. BRAT installs from release *assets*, not from the branch,
-  so the tag must be exactly `1.5.0` — no `v` prefix — with `main.js` and
-  `manifest.json` attached as assets rather than only present in the source zip.
 - Network use and reading Chrome's cookie store must be disclosed in the README if
   this ever goes to the community store.
 

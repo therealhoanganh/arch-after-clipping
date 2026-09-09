@@ -1,0 +1,12 @@
+# Obsidian plugin settings — contains local absolute paths, browser-cookie
+# preferences and the full history of clipped pages. Never commit this.
+data.json
+
+# macOS Finder metadata
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Local Claude Code settings (machine-specific)
+.claude/settings.local.json

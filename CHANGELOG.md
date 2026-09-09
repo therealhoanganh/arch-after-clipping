@@ -16,9 +16,12 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
   are considered, so a subtitle put in the folder by hand is never touched, and a
   failure to delete one is logged rather than failing the download. The new *Keep
   only one subtitle file* setting turns it off.
-- **New defaults for where things are saved.** Media now goes to `YouTube/Medias`
-  and images to `YouTube/Images`. Images previously followed Obsidian's own
-  attachment setting.
+- **New defaults for where things are saved.** Media and images both default to a
+  subfolder beside the note — `Medias` and `Images` — so a note in `Clips/YouTube`
+  gets `Clips/YouTube/Medias` and `Clips/YouTube/Images`. A named path like
+  `YouTube/Medias` was the obvious first choice and the wrong one: this plugin
+  clips any site, so the folders have to follow the note rather than name a single
+  source. Images previously followed Obsidian's own attachment setting.
 - **The separate `archived` done marker is gone.** It had not been written into
   notes since 1.0.0 and was only read, which left two properties meaning almost the
   same thing. The skip check now reads `dl-ed`, the property the media step already

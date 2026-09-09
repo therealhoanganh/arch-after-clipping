@@ -97,9 +97,9 @@ const DEFAULT_SETTINGS = {
   // is how clipFolders already behaves.
   imageFolders: [],
   // Mirrors Obsidian's own "Default location for new attachments" choices.
-  imageLocationMode: 'specified', // obsidian | vault | same | subfolder | specified
-  imageSubfolder: 'attachments',
-  imageFolder: 'YouTube/Images',
+  imageLocationMode: 'subfolder', // obsidian | vault | same | subfolder | specified
+  imageSubfolder: 'Images',
+  imageFolder: '',
   imageNameTemplate: '{{notename}} {{index}}',
   rewriteFrontmatterImages: true,
   frontmatterImageKeys: ['img', 'image', 'cover', 'thumbnail', 'banner', 'icon'],
@@ -122,9 +122,9 @@ const DEFAULT_SETTINGS = {
   markDownloadedKey: 'dl-ed',
   ytDlpPath: 'yt-dlp',
   ffmpegLocation: '',
-  videoLocationMode: 'specified', // vault | same | subfolder | specified
-  videoSubfolder: 'media',
-  videoFolder: 'YouTube/Medias',
+  videoLocationMode: 'subfolder', // vault | same | subfolder | specified
+  videoSubfolder: 'Medias',
+  videoFolder: '',
   quality: 'bestvideo*+bestaudio/best',
   audioFormat: 'mp3',
   cookiesFromBrowser: '',

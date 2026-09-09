@@ -57,7 +57,7 @@ Steps 4 and 6 have separate scopes, which is what the folder settings below are 
 
 **Images have their own folder list, separate from media.** *Download images only in these folders* scopes the image pass alone — video still downloads anywhere the plugin runs. Empty means everywhere.
 
-**Save locations** offer the same choices as Obsidian's own attachment setting: vault folder, same folder as the note, a subfolder under it, or a path you name. Images get a fifth, *follow Obsidian's attachment setting*. Out of the box media is saved to `YouTube/Medias` and images to `YouTube/Images`, both as named folders.
+**Save locations** offer the same choices as Obsidian's own attachment setting: vault folder, same folder as the note, a subfolder under it, or a path you name. Images get a fifth, *follow Obsidian's attachment setting*. Out of the box both use *in subfolder under the note*: media lands in a `Medias` folder beside the note and images in an `Images` folder, so a note in `Clips/YouTube` gets `Clips/YouTube/Medias` and `Clips/YouTube/Images`. This plugin clips any site, so the folders follow the note rather than naming one source.
 
 **Only one subtitle file is kept.** A language pattern like `en.*` matches `en`, `en-US`, `en-GB` and `en-orig`, so yt-dlp writes a separate file for each and you end up with four tracks for one video. *Keep only one subtitle file* keeps the closest match to what you asked for — a plain code beats the original-language track, which beats a regional variant — and deletes the rest. Only files named after the video itself are considered, so a subtitle you put in the folder by hand is never touched.
 

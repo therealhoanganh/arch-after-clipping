@@ -6,7 +6,7 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## Unreleased
+## 1.8.0 — current
 
 - **Notes can be left alone by tag as well as by property.** New setting
   *Leave notes carrying these tags alone*, default `yt-channel`. ARCH YT
@@ -34,7 +34,7 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
   configured before ARCH X Archive existed is fixed without editing the setting
   by hand. Keys added by hand survive.
 
-## 1.7.0 — current
+## 1.7.0
 
 - **Only one subtitle file is kept per download.** `--sub-langs en.*` matches `en`,
   `en-US`, `en-GB` and `en-orig`, so yt-dlp wrote a separate file for each and a

@@ -118,7 +118,7 @@ is the usual way a first Obsidian release silently fails. The tag must equal the
 public release; bump `manifest.json`, add a `CHANGELOG.md` entry and move the
 `— current` marker before cutting the next one.
 
-**Distribution is BRAT, and the CHAOS vault is where it is installed and tested.**
+**Distribution is BRAT, and it is installed in every vault under ~/Downloads except TESTFIELD, which is symlinked to this repo.**
 An installed plugin folder is an ordinary directory BRAT wrote, not a symlink back
 to this repo, so an edit here reaches no vault until a release is cut. Versions
 have drifted: as of 1.7.0 the vaults under `~/Downloads` carry 1.4.0, 1.6.0 and —

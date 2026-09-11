@@ -83,7 +83,13 @@ notes carrying `yt-playlist` (video notes) or `dl-all` (playlist notes) belong t
 that plugin, and the automatic pass here skips them. The property names live in
 the `otherArchKeys` setting.
 
-That check reads the **raw frontmatter as well as the metadata cache**. A note
+Channel notes from that plugin carry **no marker property** — their frontmatter
+is `url`, `icon`, `banner`, `tags` and nothing else, by design — so they are
+recognised by tag instead: `otherArchTags`, default `yt-channel`. A channel note's
+`url` is a channel address, and yt-dlp given a channel address downloads the
+channel. That is the failure this guards against.
+
+Both checks read the **raw frontmatter as well as the metadata cache**. A note
 written moments earlier is not in the cache yet, which is exactly when this runs —
 a cache-only version of this check never fired once.
 

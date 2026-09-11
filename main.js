@@ -87,6 +87,7 @@ const DEFAULT_SETTINGS = {
   // left alone. Editable, so a new marker needs no code change.
   skipOtherArchNotes: true,
   otherArchKeys: ['yt-playlist', 'dl-all', 'x-author', 'x-name'],
+  otherArchTags: ['yt-channel'],
   processedUrls: [],
   duplicateAction: 'warn', // warn | ignore
 
@@ -729,9 +730,18 @@ module.exports = class ClipArchiver extends Plugin {
       // seconds each -- and media downloaded into the profile folder. At that
       // plugin's intended scale, a few hundred profiles, that is tens of
       // thousands of probes nobody asked for.
-      const ownedByOtherArch = (this.settings.otherArchKeys || []).some(
-        (key) => (fm && fm[key] !== undefined) || this.rawHasKey(content, key)
-      );
+      //
+      // ARCH YT Playlists' channel notes carry no marker property -- their
+      // frontmatter is url, icon, banner, tags and nothing else -- so they are
+      // recognised by TAG. Left alone, a channel note's url would send yt-dlp
+      // after an entire channel.
+      const ownedByOtherArch =
+        (this.settings.otherArchKeys || []).some(
+          (key) => (fm && fm[key] !== undefined) || this.rawHasKey(content, key)
+        ) ||
+        (this.settings.otherArchTags || []).some(
+          (tag) => this.fmHasTag(fm, tag) || this.rawHasTag(content, tag)
+        );
       if (!manual && this.settings.skipOtherArchNotes && ownedByOtherArch) {
         this.log('owned by another ARCH plugin, leaving it alone:', file.path);
         return;
@@ -853,6 +863,31 @@ module.exports = class ClipArchiver extends Plugin {
   // Reads the URL straight out of the raw frontmatter block. Used as a backstop
   // when the metadata cache has not caught up with a note created moments ago.
   // Is this property present in the raw frontmatter, cache or no cache?
+  // Tags as the metadata cache presents them: a list, a comma string, with or
+  // without '#'. Also covers the singular 'tag' key, which Obsidian reads too.
+  fmHasTag(fm, tag) {
+    if (!fm) return false;
+    const want = String(tag || '').replace(/^#/, '').toLowerCase();
+    const raw = [].concat(fm.tags ?? [], fm.tag ?? []);
+    return raw
+      .flatMap((v) => String(v ?? '').split(','))
+      .some((v) => v.trim().replace(/^#/, '').toLowerCase() === want);
+  }
+
+  // Same question asked of the raw text, for a note the cache has not indexed
+  // yet: a "tags:" block with "- tag" items, or an inline "tags: [a, b]".
+  rawHasTag(content, tag) {
+    const block = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!block) return false;
+    const m = block[1].match(/^tags?\s*:(.*)$((?:\r?\n[ \t]+-.*)*)/m);
+    if (!m) return false;
+    const want = String(tag || '').replace(/^#/, '').toLowerCase();
+    const items = (m[1] + m[2])
+      .split(/[\n,[\]]/)
+      .map((x) => x.trim().replace(/^-\s*/, '').replace(/^["']|["']$/g, '').replace(/^#/, '').toLowerCase());
+    return items.includes(want);
+  }
+
   rawHasKey(content, key) {
     const block = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!block) return false;
@@ -3199,6 +3234,11 @@ module.exports = class ClipArchiver extends Plugin {
         if (!saved.otherArchKeys.includes(key)) saved.otherArchKeys.push(key);
       }
     }
+    if (Array.isArray(saved.otherArchTags)) {
+      for (const tag of DEFAULT_SETTINGS.otherArchTags) {
+        if (!saved.otherArchTags.includes(tag)) saved.otherArchTags.push(tag);
+      }
+    }
     // Migrate the single URL property name into the candidate list, keeping it first.
     if (saved.frontmatterUrlKey && !saved.frontmatterUrlKeys) {
       const rest = DEFAULT_SETTINGS.frontmatterUrlKeys.filter((k) => k !== saved.frontmatterUrlKey);
@@ -3220,7 +3260,7 @@ module.exports = class ClipArchiver extends Plugin {
     }
     if (saved.videoLocationMode === undefined) saved.videoLocationMode = 'specified';
 
-    for (const key of ['clipFolders', 'excludeFolders', 'imageFolders', 'otherArchKeys', 'frontmatterImageKeys', 'frontmatterUrlKeys', 'processedUrls']) {
+    for (const key of ['clipFolders', 'excludeFolders', 'imageFolders', 'otherArchKeys', 'otherArchTags', 'frontmatterImageKeys', 'frontmatterUrlKeys', 'processedUrls']) {
       if (!Array.isArray(this.settings[key])) this.settings[key] = DEFAULT_SETTINGS[key].slice();
     }
     if (!this.settings.frontmatterImageLabels || typeof this.settings.frontmatterImageLabels !== 'object') {
@@ -3764,6 +3804,20 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       .addText((t) =>
         t.setValue((s.otherArchKeys || []).join(', ')).onChange(async (v) => {
           s.otherArchKeys = splitList(v);
+          await this.save();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName('Leave notes carrying these tags alone')
+      .setDesc(
+        'Comma-separated tags, the same skip by tag rather than by property. ' +
+          'ARCH YT Playlists tags its channel notes yt-channel and writes no marker property on them; ' +
+          'without this, a channel note\'s url would send yt-dlp after the whole channel.'
+      )
+      .addText((t) =>
+        t.setValue((s.otherArchTags || []).join(', ')).onChange(async (v) => {
+          s.otherArchTags = splitList(v).map((x) => x.replace(/^#/, ''));
           await this.save();
         })
       );

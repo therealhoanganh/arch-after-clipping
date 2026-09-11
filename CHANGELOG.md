@@ -8,6 +8,12 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 ## Unreleased
 
+- **Notes can be left alone by tag as well as by property.** New setting
+  *Leave notes carrying these tags alone*, default `yt-channel`. ARCH YT
+  Playlists' channel notes have no marker property — their frontmatter is
+  `url`, `icon`, `banner`, `tags` and nothing else — and a channel note's `url`
+  would otherwise send yt-dlp after the entire channel. Missing defaults are
+  appended to a saved list on load, the same as `otherArchKeys`.
 - **Image properties can carry a label of your choosing.** The new *Labels for
   image properties* setting takes `property=Label` pairs, e.g. `banner=Banner,
   icon=Icon`, and a listed property is rewritten as `[[file.webp|Banner]]`

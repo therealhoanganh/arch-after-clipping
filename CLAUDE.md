@@ -60,8 +60,10 @@ render correctly in Pretty Properties, tested. The alias form was absent for a
 while because this plugin clips any site, so no *one* label fits every property
 it might rewrite; a label chosen per property (`banner=Banner, icon=Icon`) is
 what answers that. The default is empty, so nothing changes until it is set.
-Whatever label a template put on the property is still discarded, not moved —
-the setting decides. ARCH YT Playlists is YouTube-only and hardcodes its alias.
+A label the template itself put on the value — `[Thumbnail](url)` on a video
+clip — wins over the setting, because the template author knew what the picture
+is and the setting cannot; the setting fills in for bare addresses and `![](url)`.
+ARCH YT Playlists is YouTube-only and hardcodes its alias.
 
 **Video + Audio is one download.** `bestvideo*+bestaudio` already fetches and
 merges the audio, so the mp3 is extracted from the merged file with ffmpeg rather

@@ -184,6 +184,18 @@ function parseLabels(raw) {
   return out;
 }
 
+// The label a property value already carries: "[Thumbnail](url)",
+// "![Thumbnail](url)" or "[[file|Thumbnail]]". A bare address, or an empty
+// label such as "![](url)", yields ''.
+function existingLabel(value) {
+  const v = String(value || '').trim();
+  const md = v.match(/^!?\[([^\]]*)\]\(/);
+  if (md) return md[1].trim();
+  const wiki = v.match(/^!?\[\[[^\]|]*\|([^\]]*)\]\]$/);
+  if (wiki) return wiki[1].trim();
+  return '';
+}
+
 function joinLabels(labels) {
   return Object.entries(labels || {}).map(([k, v]) => `${k}=${v}`).join(', ');
 }
@@ -1138,13 +1150,14 @@ module.exports = class ClipArchiver extends Plugin {
     this.log(msg);
   }
 
-  // A bare [[file.png]] unless the property has a label in
-  // frontmatterImageLabels, in which case [[file.png|Label]]. Aliases render
-  // correctly in Pretty Properties; that was tested. The alias form was
-  // dropped for a while because this plugin clips any site and no SINGLE label
-  // fits every property it might rewrite -- a label chosen per property is
-  // what answers that. Whatever label the property carried before is still
-  // discarded rather than moved: the setting decides, not the template.
+  // [[file.png|Label]] where a label can be found, else a bare [[file.png]].
+  // The label the template put on the value wins -- "[Thumbnail](url)" on a
+  // video clip stays Thumbnail -- because the template author chose that word
+  // knowing what the picture is, and the setting cannot. frontmatterImageLabels
+  // fills in when the value carried none (a bare address, or "![](url)").
+  // Aliases render correctly in Pretty Properties; that was tested. They were
+  // absent for a while because this plugin clips any site and no SINGLE label
+  // fits every property; a label per property, and per template, answers that.
   rewriteImageValue(original, tfile, sourcePath, key) {
     let link = tfile.path;
     try {
@@ -1152,7 +1165,7 @@ module.exports = class ClipArchiver extends Plugin {
     } catch (_) {
       /* older builds: fall back to the full vault path */
     }
-    const label = key ? (this.settings.frontmatterImageLabels || {})[key] : '';
+    const label = existingLabel(original) || (key ? (this.settings.frontmatterImageLabels || {})[key] : '') || '';
     return label ? `[[${link}|${label}]]` : `[[${link}]]`;
   }
 
@@ -3823,7 +3836,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Repoint image properties too')
-      .setDesc('Rewrites frontmatter properties that hold a picture address into a [[wikilink]] to the saved file. Any label the property carried is dropped; the labels below are used instead.')
+      .setDesc('Rewrites frontmatter properties that hold a picture address into a [[wikilink]] to the saved file, keeping any label the value carried.')
       .addToggle((t) =>
         t.setValue(s.rewriteFrontmatterImages).onChange(async (v) => {
           s.rewriteFrontmatterImages = v;
@@ -3843,7 +3856,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Labels for image properties')
-      .setDesc('Comma-separated property=Label pairs. A property listed here is written as [[file.webp|Label]]; any other stays a bare [[file.webp]]. Example: banner=Banner, icon=Icon')
+      .setDesc('Comma-separated property=Label pairs, used when the value has no label of its own. A label the template already gave, as in [Thumbnail](url), is kept. A property listed here is written as [[file.webp|Label]]; any other stays a bare [[file.webp]]. Example: banner=Banner, icon=Icon')
       .addText((t) =>
         t.setPlaceholder('banner=Banner, icon=Icon')
           .setValue(joinLabels(s.frontmatterImageLabels)).onChange(async (v) => {

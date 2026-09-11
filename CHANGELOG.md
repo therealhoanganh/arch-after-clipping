@@ -11,7 +11,10 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 - **Image properties can carry a label of your choosing.** The new *Labels for
   image properties* setting takes `property=Label` pairs, e.g. `banner=Banner,
   icon=Icon`, and a listed property is rewritten as `[[file.webp|Banner]]`
-  instead of the bare `[[file.webp]]`. Unlisted properties are unchanged, and
+  instead of the bare `[[file.webp]]`. A label the template already gave the
+  value — `[Thumbnail](url)` on a video clip — is kept in preference to the
+  setting, since the template knew what the picture is; the setting fills in
+  for bare addresses and `![](url)`. Unlisted properties are unchanged, and
   the default is empty. The alias form was removed in 0.16.0 because no single
   label fits every property this plugin might touch; a label per property is
   the answer to that objection rather than a reversal of it.

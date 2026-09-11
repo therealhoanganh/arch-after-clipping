@@ -6,7 +6,19 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.8.0 — current
+## 1.9.0 — current
+
+- **A *Property order* setting, applied whenever this plugin writes a note's
+  properties.** Downloading media used to append `media` at the bottom and
+  shove `dl-ed` to the top, so a video note looked different depending on
+  which plugin had downloaded it. Listed properties now come first in the
+  configured order and everything else keeps its place after them. The default
+  is the ARCH video note template — `media, channel, yt-playlist, banner, url,
+  dl-ed, v-rank, duration, status, published, tags` — the same as YT
+  Playlists' default. Empty keeps whatever order a note already has, which is
+  the old behaviour minus the `dl-ed` shuffle.
+
+## 1.8.0
 
 - **Notes can be left alone by tag as well as by property.** New setting
   *Leave notes carrying these tags alone*, default `yt-channel`. ARCH YT

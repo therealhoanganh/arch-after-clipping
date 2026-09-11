@@ -76,6 +76,16 @@ plugin renders the player in an iframe with a shadow root, so there is no
 `<video>` element to attach a poster to. Thumbnails are still downloaded and
 recorded, which was the original requirement.
 
+## Property order
+
+`setFrontmatter` is the only frontmatter writer, and it applies `frontmatterOrder`
+after every mutation: listed keys first in that order, the rest in the order they
+already had. The default is the ARCH video note template and is deliberately the
+same string as YT Playlists' `videoNoteOrder`, so a video note reads the same
+whichever plugin downloaded its media. Before this, media download appended
+`media` at the bottom and moved `dl-ed` to the top by hand — that shuffle is gone;
+the order setting is where position is decided.
+
 ## Coupling to ARCH YT Playlists
 
 Separate plugin, separate repo, no shared code or runtime state. One link exists:

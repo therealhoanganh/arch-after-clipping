@@ -122,6 +122,11 @@ const DEFAULT_SETTINGS = {
   defaultDownloadMode: 'video_and_audio',
   // Written to the note once media is on disk. Empty writes nothing.
   markDownloadedKey: 'dl-ed',
+  // Applied whenever this plugin writes frontmatter. Listed properties come
+  // first in this order; everything else keeps its place after them. The
+  // default is the ARCH video note template, media first, so a download does
+  // not leave the player at the bottom of the properties panel.
+  frontmatterOrder: 'media, channel, yt-playlist, banner, url, dl-ed, v-rank, duration, status, published, tags',
   ytDlpPath: 'yt-dlp',
   ffmpegLocation: '',
   videoLocationMode: 'subfolder', // vault | same | subfolder | specified
@@ -1036,10 +1041,33 @@ module.exports = class ClipArchiver extends Plugin {
 
   async setFrontmatter(file, mutate) {
     try {
-      await this.app.fileManager.processFrontMatter(file, mutate);
+      await this.app.fileManager.processFrontMatter(file, (fm) => {
+        mutate(fm);
+        this.applyOrder(fm);
+      });
     } catch (e) {
       this.log('could not write frontmatter on', file.path, e);
     }
+  }
+
+  // Key order is insertion order and that is what gets serialised, so the
+  // whole object is rebuilt: listed keys first, in the configured order, then
+  // every other key in the order it already had. Same rules as YT Playlists'
+  // applyOrder, and the same default, so a video note looks the same whichever
+  // plugin downloaded its media.
+  applyOrder(fm) {
+    const wanted = splitList(this.settings.frontmatterOrder);
+    if (!wanted.length) return fm;
+    const ordered = {};
+    for (const key of wanted) {
+      if (Object.prototype.hasOwnProperty.call(fm, key)) ordered[key] = fm[key];
+    }
+    for (const key of Object.keys(fm)) {
+      if (!(key in ordered)) ordered[key] = fm[key];
+    }
+    for (const key of Object.keys(fm)) delete fm[key];
+    Object.assign(fm, ordered);
+    return fm;
   }
 
   /* ---------------- images ---------------- */
@@ -2367,21 +2395,10 @@ module.exports = class ClipArchiver extends Plugin {
       // ARCH YT Playlists only writes it on notes it owns, which a Web Clipper
       // note is not. Set it here, where the files are already on disk, so the
       // flag cannot claim a download that failed.
+      // Where it and media end up is the property order setting's business;
+      // setFrontmatter applies it after this.
       const doneKey = String(this.settings.markDownloadedKey || '').trim();
-      if (doneKey) {
-        const isNew = !Object.prototype.hasOwnProperty.call(fm, doneKey);
-        fm[doneKey] = true;
-        // Assigning a key that was not there appends it below everything else.
-        // A status flag is worth seeing first, so rebuild the block with it in
-        // front. A key that already existed keeps the position it had.
-        if (isNew) {
-          const rest = {};
-          for (const k of Object.keys(fm)) if (k !== doneKey) rest[k] = fm[k];
-          for (const k of Object.keys(fm)) delete fm[k];
-          fm[doneKey] = true;
-          Object.assign(fm, rest);
-        }
-      }
+      if (doneKey) fm[doneKey] = true;
     });
   }
 
@@ -4040,7 +4057,6 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       .setName('Mark the note as downloaded')
       .setDesc(
         'A property set to true alongside media, once the files are on disk — so it never claims a download that failed. ' +
-          'A note that already has the property keeps its position; one that does not gets it as its first property. ' +
           'Leave this empty to write nothing.'
       )
       .addText((t) =>
@@ -4049,6 +4065,23 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           .setValue(s.markDownloadedKey)
           .onChange(async (v) => {
             s.markDownloadedKey = v.trim();
+            await this.save();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Property order')
+      .setDesc(
+        'Comma-separated. Applied whenever this plugin writes a note\'s properties: the ones listed come first, in this order, ' +
+          'and everything else keeps its place after them. The default matches ARCH YT Playlists, so a video note reads the same ' +
+          'whichever plugin downloaded its media. Leave empty to keep the order a note already has.'
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder(DEFAULT_SETTINGS.frontmatterOrder)
+          .setValue(s.frontmatterOrder)
+          .onChange(async (v) => {
+            s.frontmatterOrder = v.trim();
             await this.save();
           })
       );

@@ -8,6 +8,13 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 
 ## Unreleased
 
+- **Image properties can carry a label of your choosing.** The new *Labels for
+  image properties* setting takes `property=Label` pairs, e.g. `banner=Banner,
+  icon=Icon`, and a listed property is rewritten as `[[file.webp|Banner]]`
+  instead of the bare `[[file.webp]]`. Unlisted properties are unchanged, and
+  the default is empty. The alias form was removed in 0.16.0 because no single
+  label fits every property this plugin might touch; a label per property is
+  the answer to that objection rather than a reversal of it.
 - **ARCH X Archive notes are now left alone.** `otherArchKeys` gains `x-author`
   and `x-name`, which that plugin writes on both its note types. Without them
   every archived X post got a full yt-dlp metadata probe, about three seconds

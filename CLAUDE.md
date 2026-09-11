@@ -54,10 +54,14 @@ re-clip of the same page is skipped wherever it lands. It gates the **media step
 only** — images and the transform re-run, because deleting a note and clipping it
 again is the normal testing loop and it used to do nothing at all.
 
-**Frontmatter image properties are a bare `[[file.jpg]]`, not an alias.** Not
-because aliases fail: they render correctly in Pretty Properties, tested. The
-reason is scope — this plugin clips any site, so no one label fits every property
-it might rewrite. ARCH YT Playlists is YouTube-only and does use an alias.
+**Frontmatter image properties are a bare `[[file.jpg]]` unless the property
+has a label in `frontmatterImageLabels`**, then `[[file.jpg|Label]]`. Aliases
+render correctly in Pretty Properties, tested. The alias form was absent for a
+while because this plugin clips any site, so no *one* label fits every property
+it might rewrite; a label chosen per property (`banner=Banner, icon=Icon`) is
+what answers that. The default is empty, so nothing changes until it is set.
+Whatever label a template put on the property is still discarded, not moved —
+the setting decides. ARCH YT Playlists is YouTube-only and hardcodes its alias.
 
 **Video + Audio is one download.** `bestvideo*+bestaudio` already fetches and
 merges the audio, so the mp3 is extracted from the merged file with ffmpeg rather

@@ -103,6 +103,7 @@ const DEFAULT_SETTINGS = {
   imageNameTemplate: '{{notename}} {{index}}',
   rewriteFrontmatterImages: true,
   frontmatterImageKeys: ['img', 'image', 'cover', 'thumbnail', 'banner', 'icon'],
+  frontmatterImageLabels: {},       // { banner: 'Banner' } -> [[file.webp|Banner]]; unlisted keys stay bare
 
   // --- transform ---------------------------------------------------
   enableTransform: true,
@@ -167,6 +168,24 @@ function splitList(raw) {
     .split(/[,\n]/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+// "banner=Banner, icon=Icon" <-> { banner: 'Banner', icon: 'Icon' }. An entry
+// with no "=" or an empty side is ignored rather than half-applied.
+function parseLabels(raw) {
+  const out = {};
+  for (const entry of splitList(raw)) {
+    const eq = entry.indexOf('=');
+    if (eq === -1) continue;
+    const key = entry.slice(0, eq).trim();
+    const label = entry.slice(eq + 1).trim();
+    if (key && label) out[key] = label;
+  }
+  return out;
+}
+
+function joinLabels(labels) {
+  return Object.entries(labels || {}).map(([k, v]) => `${k}=${v}`).join(', ');
 }
 
 function sanitizeName(name) {
@@ -1107,7 +1126,7 @@ module.exports = class ClipArchiver extends Plugin {
           const link = this.app.metadataCache.fileToLinktext(tf, file.path);
           // Keep the shape the template used: [Thumbnail](...) stays a markdown
           // link so Bases can render it; anything else becomes a wikilink.
-          f[t.key] = this.rewriteImageValue(String(f[t.key] || ''), tf, file.path);
+          f[t.key] = this.rewriteImageValue(String(f[t.key] || ''), tf, file.path, t.key);
         }
       });
     }
@@ -1119,20 +1138,22 @@ module.exports = class ClipArchiver extends Plugin {
     this.log(msg);
   }
 
-  // A bare [[file.png]], not the [[path|label]] alias form -- but not because
-  // aliases fail. They render correctly in Pretty Properties; that was tested.
-  // The reason is scope: this plugin clips any site, so no single label fits
-  // every property it might rewrite. ARCH YT Playlists is YouTube-only and does
-  // use one, [[Name.jpg|Thumbnail]]. Whatever label a property carried is
-  // dropped rather than moved, which is why there is no label setting.
-  rewriteImageValue(original, tfile, sourcePath) {
+  // A bare [[file.png]] unless the property has a label in
+  // frontmatterImageLabels, in which case [[file.png|Label]]. Aliases render
+  // correctly in Pretty Properties; that was tested. The alias form was
+  // dropped for a while because this plugin clips any site and no SINGLE label
+  // fits every property it might rewrite -- a label chosen per property is
+  // what answers that. Whatever label the property carried before is still
+  // discarded rather than moved: the setting decides, not the template.
+  rewriteImageValue(original, tfile, sourcePath, key) {
     let link = tfile.path;
     try {
       link = this.app.metadataCache.fileToLinktext(tfile, sourcePath || '');
     } catch (_) {
       /* older builds: fall back to the full vault path */
     }
-    return `[[${link}]]`;
+    const label = key ? (this.settings.frontmatterImageLabels || {})[key] : '';
+    return label ? `[[${link}|${label}]]` : `[[${link}]]`;
   }
 
   // Deleting a note and clipping the page again leaves the old attachment in
@@ -3189,6 +3210,9 @@ module.exports = class ClipArchiver extends Plugin {
     for (const key of ['clipFolders', 'excludeFolders', 'imageFolders', 'otherArchKeys', 'frontmatterImageKeys', 'frontmatterUrlKeys', 'processedUrls']) {
       if (!Array.isArray(this.settings[key])) this.settings[key] = DEFAULT_SETTINGS[key].slice();
     }
+    if (!this.settings.frontmatterImageLabels || typeof this.settings.frontmatterImageLabels !== 'object') {
+      this.settings.frontmatterImageLabels = {};
+    }
     if (!Array.isArray(this.settings.transformRules)) {
       this.settings.transformRules = DEFAULT_SETTINGS.transformRules.map((r) => ({ ...r }));
     }
@@ -3799,7 +3823,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Repoint image properties too')
-      .setDesc('Rewrites frontmatter properties that hold a picture address into a plain [[wikilink]] to the saved file. Any label the property carried is dropped.')
+      .setDesc('Rewrites frontmatter properties that hold a picture address into a [[wikilink]] to the saved file. Any label the property carried is dropped; the labels below are used instead.')
       .addToggle((t) =>
         t.setValue(s.rewriteFrontmatterImages).onChange(async (v) => {
           s.rewriteFrontmatterImages = v;
@@ -3815,6 +3839,17 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           s.frontmatterImageKeys = splitList(v);
           await this.save();
         })
+      );
+
+    new Setting(containerEl)
+      .setName('Labels for image properties')
+      .setDesc('Comma-separated property=Label pairs. A property listed here is written as [[file.webp|Label]]; any other stays a bare [[file.webp]]. Example: banner=Banner, icon=Icon')
+      .addText((t) =>
+        t.setPlaceholder('banner=Banner, icon=Icon')
+          .setValue(joinLabels(s.frontmatterImageLabels)).onChange(async (v) => {
+            s.frontmatterImageLabels = parseLabels(v);
+            await this.save();
+          })
       );
 
     /* ---- transform ---- */

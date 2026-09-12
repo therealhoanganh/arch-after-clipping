@@ -6,7 +6,23 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.9.0 — current
+## 1.9.1 — current
+
+- **A clip that launched Obsidian is now processed.** Saving from Web Clipper
+  to a vault that is not open starts Obsidian and writes the note during
+  startup — before the plugin's listener exists, because that listener is
+  deliberately registered after layout-ready to sidestep the re-index replay.
+  The result was the one clip that mattered being the one clip never seen; the
+  workaround was deleting the note and clipping again. Once the listener is in
+  place the plugin now sweeps for notes younger than the grace window (the
+  same 120 s the replay guard uses) that carry a source URL, and runs them
+  through the normal entry point. A young note without a URL is left alone —
+  the live listener takes any new note because it saw it being born, but here
+  the only evidence is a young file, and that could be one the user just made
+  by hand. The console line is `clipped before the plugin was listening,
+  catching up:`.
+
+## 1.9.0
 
 - **A *Property order* setting, applied whenever this plugin writes a note's
   properties.** Downloading media used to append `media` at the bottom and

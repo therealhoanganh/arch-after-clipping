@@ -49,6 +49,14 @@ video twice, and the processed-URL record already prevents that. A duplicate not
 is visible and easy to delete by hand; duplicate media is not, and that is handled
 by image hashing and the record. Do not reintroduce it.
 
+**The create listener is registered after layout-ready, and that alone misses
+the clip that launched Obsidian.** Web Clipper saving to a closed vault starts
+Obsidian and writes the note during startup, before any listener registered in
+`onLayoutReady` exists. `catchUpStartupClips` runs right after the listener is
+registered and sweeps for notes younger than `graceSeconds` that carry a source
+URL. Do not "simplify" by registering the listener earlier — that brings back
+the startup popup storm the deferral was added to fix.
+
 **The processed record is keyed on the source URL, not the note path**, so a
 re-clip of the same page is skipped wherever it lands. It gates the **media step
 only** — images and the transform re-run, because deleting a note and clipping it

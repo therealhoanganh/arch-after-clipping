@@ -291,6 +291,16 @@ module.exports = class ClipArchiver extends Plugin {
 
     // Obsidian replays a "create" event for every existing file while it indexes
     // the vault at startup. Registering after layout-ready skips that replay.
+    //
+    // It also skips the one clip that matters most: when Web Clipper saves to a
+    // vault that is not open, it launches Obsidian and the note is written
+    // during startup, before this listener exists. So once the listener is in
+    // place, sweep for notes young enough to be that clip and run them through
+    // the same entry point. The seen-set keeps the sweep off any note the live
+    // listener already took; it never blocks the listener itself, because
+    // deleting a note and clipping it again at the same path is the normal
+    // testing loop.
+    this.seenThisSession = new Set();
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
         this.app.vault.on('create', (file) => {
@@ -298,6 +308,7 @@ module.exports = class ClipArchiver extends Plugin {
         })
       );
       this.log('watching for new notes');
+      this.catchUpStartupClips();
     });
 
     this.addRibbonIcon('archive', 'Archive this clip', () => this.archiveActiveNote());
@@ -588,9 +599,31 @@ module.exports = class ClipArchiver extends Plugin {
 
   /* ---------------- scope + entry points ---------------- */
 
+  // Notes that arrived while the plugin was not yet listening. Only a note
+  // with a source URL qualifies: the live listener takes any new note because
+  // it saw it being born, but here the only evidence is a young file, and a
+  // young file without a URL is a note the user just made by hand.
+  async catchUpStartupClips() {
+    if (!this.settings.enabled) return;
+    const cutoff = Date.now() - this.settings.graceSeconds * 1000;
+    const young = this.app.vault.getMarkdownFiles().filter((f) => (f.stat?.ctime ?? 0) >= cutoff);
+    for (const file of young) {
+      // Re-checked per file: the live listener may have taken it during an await.
+      if (this.seenThisSession.has(file.path)) continue;
+      const content = await this.app.vault.cachedRead(file).catch(() => '');
+      const url =
+        this.resolveSourceUrl(this.app.metadataCache.getFileCache(file)?.frontmatter) ||
+        this.extractUrlFromRawFrontmatter(content);
+      if (!url) continue;
+      this.log('clipped before the plugin was listening, catching up:', file.path);
+      this.onFileCreated(file);
+    }
+  }
+
   onFileCreated(file) {
     if (!this.settings.enabled) return;
     if (file.extension !== 'md') return;
+    this.seenThisSession.add(file.path);
 
     // Second guard against a re-index replay: a genuine clip is seconds old.
     const age = (Date.now() - (file.stat?.ctime ?? 0)) / 1000;

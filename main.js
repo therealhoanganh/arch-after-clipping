@@ -23,6 +23,11 @@ const os = require('os');
  * ------------------------------------------------------------------ */
 
 const MD_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^\s)"']+)(?:\s+(?:"[^"]*"|'[^']*'))?\)/g;
+// A plain link, not an embed. Never a download candidate on its own -- it is
+// rewritten only when its address is one an image property or embed already
+// fetched, as with a template that writes [Cover]({{image}}) in the body and
+// the same address in a cover property.
+const MD_LINK_RE = /(^|[^!])\[([^\]]*)\]\((https?:\/\/[^\s)"']+)(?:\s+(?:"[^"]*"|'[^']*'))?\)/g;
 const HTML_IMG_RE = /<img\s[^>]*\bsrc=(?:"(https?:\/\/[^"]+)"|'(https?:\/\/[^']+)')[^>]*>/gi;
 const BARE_URL_RE = /https?:\/\/[^\s)\]>"'`]+/;
 
@@ -126,7 +131,7 @@ const DEFAULT_SETTINGS = {
   // first in this order; everything else keeps its place after them. The
   // default is the ARCH video note template, media first, so a download does
   // not leave the player at the bottom of the properties panel.
-  frontmatterOrder: 'media, channel, yt-playlist, banner, url, dl-ed, v-rank, duration, status, published, tags',
+  frontmatterOrder: 'media, channel, yt-playlist, banner, url, dl-ed, rank, duration, status, published, tags',
   ytDlpPath: 'yt-dlp',
   ffmpegLocation: '',
   videoLocationMode: 'subfolder', // vault | same | subfolder | specified
@@ -1075,8 +1080,9 @@ module.exports = class ClipArchiver extends Plugin {
   async setFrontmatter(file, mutate) {
     try {
       await this.app.fileManager.processFrontMatter(file, (fm) => {
+        const before = Object.keys(fm);
         mutate(fm);
-        this.applyOrder(fm);
+        this.applyOrder(fm, before);
       });
     } catch (e) {
       this.log('could not write frontmatter on', file.path, e);
@@ -1084,20 +1090,33 @@ module.exports = class ClipArchiver extends Plugin {
   }
 
   // Key order is insertion order and that is what gets serialised, so the
-  // whole object is rebuilt: listed keys first, in the configured order, then
-  // every other key in the order it already had. Same rules as YT Playlists'
-  // applyOrder, and the same default, so a video note looks the same whichever
-  // plugin downloaded its media.
-  applyOrder(fm) {
+  // object is rebuilt with each key this write ADDED slotted in by the
+  // configured order -- after the nearest listed key above it that the note
+  // has, else before the nearest listed key below it, else at the end. Keys
+  // the note already had are never moved: this plugin clips every kind of
+  // page, and the list is a video note's shape, so applying it to a clipped
+  // article dragged url, published and tags to the top of a template that
+  // had them elsewhere. The same default as YT Playlists, so media and dl-ed
+  // land in the same place whichever plugin downloaded a video.
+  applyOrder(fm, before) {
     const wanted = splitList(this.settings.frontmatterOrder);
     if (!wanted.length) return fm;
+    const had = new Set(before || Object.keys(fm));
+    const keys = Object.keys(fm).filter((k) => had.has(k));
+    const added = Object.keys(fm).filter((k) => !had.has(k));
+    for (const key of added) {
+      const rank = wanted.indexOf(key);
+      let at = keys.length;
+      if (rank >= 0) {
+        const above = wanted.slice(0, rank).reverse().find((k) => keys.includes(k));
+        const below = wanted.slice(rank + 1).find((k) => keys.includes(k));
+        if (above !== undefined) at = keys.indexOf(above) + 1;
+        else if (below !== undefined) at = keys.indexOf(below);
+      }
+      keys.splice(at, 0, key);
+    }
     const ordered = {};
-    for (const key of wanted) {
-      if (Object.prototype.hasOwnProperty.call(fm, key)) ordered[key] = fm[key];
-    }
-    for (const key of Object.keys(fm)) {
-      if (!(key in ordered)) ordered[key] = fm[key];
-    }
+    for (const key of keys) ordered[key] = fm[key];
     for (const key of Object.keys(fm)) delete fm[key];
     Object.assign(fm, ordered);
     return fm;
@@ -1220,6 +1239,10 @@ module.exports = class ClipArchiver extends Plugin {
       const tf = urlToFile.get(a || b);
       return tf ? linkFor(tf) : whole;
     });
+    newBody = newBody.replace(MD_LINK_RE, (whole, lead, label, url) => {
+      const tf = urlToFile.get(url);
+      return tf ? lead + this.buildLink(tf, file.path, label) : whole;
+    });
 
     if (newBody !== body) {
       await this.app.vault.process(file, () => fm + newBody);
@@ -1290,6 +1313,21 @@ module.exports = class ClipArchiver extends Plugin {
       }
     }
     return null;
+  }
+
+  // The link form of buildEmbed: a [label](url) stays a link to the file,
+  // in whichever syntax the vault uses, rather than becoming an embed.
+  buildLink(tfile, sourcePath, label) {
+    const link = this.app.metadataCache.fileToLinktext(tfile, sourcePath);
+    let useMarkdown = false;
+    try {
+      useMarkdown = !!this.app.vault.getConfig('useMarkdownLinks');
+    } catch (_) {
+      /* older builds: fall back to wikilinks */
+    }
+    const text = (label || '').replace(/[[\]|]/g, '').trim();
+    if (useMarkdown) return `[${text}](<${link}>)`;
+    return text ? `[[${link}|${text}]]` : `[[${link}]]`;
   }
 
   buildEmbed(tfile, sourcePath, alt) {
@@ -3270,6 +3308,11 @@ module.exports = class ClipArchiver extends Plugin {
       }
     }
 
+    // The order named v-rank until YT Playlists 1.4.4 renamed it rank. Only
+    // the exact old default moves; anything else was typed and stays.
+    if (saved.frontmatterOrder === 'media, channel, yt-playlist, banner, url, dl-ed, v-rank, duration, status, published, tags') {
+      saved.frontmatterOrder = DEFAULT_SETTINGS.frontmatterOrder;
+    }
     // Migrate from Auto Download Video After Web Clipping 1.x
     if (saved.downloadFolder && !saved.videoFolder) saved.videoFolder = saved.downloadFolder;
     if (Array.isArray(saved.clipFolders) && saved.watchAllFolders === undefined) {
@@ -4105,9 +4148,9 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Property order')
       .setDesc(
-        'Comma-separated. Applied whenever this plugin writes a note\'s properties: the ones listed come first, in this order, ' +
-          'and everything else keeps its place after them. The default matches ARCH YT Playlists, so a video note reads the same ' +
-          'whichever plugin downloaded its media. Leave empty to keep the order a note already has.'
+        'Comma-separated. Decides where a property this plugin adds (media, dl-ed) goes: after the nearest listed property ' +
+          'the note already has. Properties already on the note are never moved. The default matches ARCH YT Playlists, so ' +
+          'a video note reads the same whichever plugin downloaded its media. Leave empty to append new properties at the end.'
       )
       .addText((t) =>
         t

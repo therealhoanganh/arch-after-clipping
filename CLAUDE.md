@@ -87,12 +87,15 @@ recorded, which was the original requirement.
 ## Property order
 
 `setFrontmatter` is the only frontmatter writer, and it applies `frontmatterOrder`
-after every mutation: listed keys first in that order, the rest in the order they
-already had. The default is the ARCH video note template and is deliberately the
-same string as YT Playlists' `videoNoteOrder`, so a video note reads the same
-whichever plugin downloaded its media. Before this, media download appended
-`media` at the bottom and moved `dl-ed` to the top by hand — that shuffle is gone;
-the order setting is where position is decided.
+after every mutation — **to the keys that mutation added, and to nothing else.**
+An added key goes after the nearest listed key above it that the note has, else
+before the nearest listed key below it, else at the end. Keys the note already
+had are never moved. 1.9.0 ordered the whole note, and since the list is a video
+note's shape and this plugin clips every kind of page, that scrambled every
+article template on the first cover download. The default is the ARCH video
+note template and is deliberately the same string as YT Playlists'
+`videoNoteOrder`, so `media` and `dl-ed` land in the same place whichever plugin
+downloaded a video's media.
 
 ## Coupling to ARCH YT Playlists
 

@@ -6,7 +6,29 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.9.1 — current
+## 1.9.2 — current
+
+- **Property order no longer moves properties a note already has.** 1.9.0
+  applied the order to the whole note — listed keys first, the rest after —
+  and the list is a *video* note's shape. On a clipped article it dragged
+  `url`, `published` and `tags` to the top of a template that had them
+  elsewhere, every time the plugin wrote a cover image or media. Now the
+  order decides only where a property this plugin **adds** goes: after the
+  nearest listed property the note already has, else before the nearest one
+  below, else at the end. `media` and `dl-ed` still land in the template's
+  place on a YT Playlists note; a hentai clip keeps its own order.
+- **A plain `[Cover](url)` in the body is rewritten when that address was
+  downloaded for a property or embed.** The body pass only handled `![]()`
+  embeds and `<img>`, so a template that wrote `[Cover]({{image}})` in the
+  body and the same address in a cover property got the property updated and
+  the body link left remote. It becomes a link to the saved file, in the
+  vault's link syntax, keeping its label. A plain link is never a download
+  candidate on its own — only an address already fetched is rewritten.
+- **The default order names `rank`, not `v-rank`**, following YT Playlists
+  1.4.4. A saved order that is exactly the old default moves; anything typed
+  stays.
+
+## 1.9.1
 
 - **A clip that launched Obsidian is now processed.** Saving from Web Clipper
   to a vault that is not open starts Obsidian and writes the note during

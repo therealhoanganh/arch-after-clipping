@@ -6,7 +6,19 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.9.2 — current
+## 1.9.3 — current
+
+- **A fourth download choice: Subtitles.** In the prompt and as a default
+  choice, matching YT Playlists 1.5.1. Fetches only the subtitle files, into
+  the folder the video would go in and under its stem, so a later video
+  download finds them there and yt-dlp does not fetch them again. Nothing is
+  linked or embedded and no property is written — a subtitle is a sidecar,
+  never the media. If a subtitle file for the note is already there, nothing
+  is fetched. The processed record is written as usual, so the automatic
+  pass will not come back for the video; *Download media for this note*
+  still will.
+
+## 1.9.2
 
 - **Property order no longer moves properties a note already has.** 1.9.0
   applied the order to the whole note — listed keys first, the rest after —

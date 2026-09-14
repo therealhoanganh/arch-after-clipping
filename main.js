@@ -1864,13 +1864,46 @@ module.exports = class ClipArchiver extends Plugin {
       return r;
     };
 
+    // Subtitles only: the files land where the video would, under its stem,
+    // so a later video download finds them and yt-dlp does not fetch them
+    // again. The print file stays empty with --skip-download, so the files
+    // are matched on disk. Nothing is linked or embedded -- a subtitle is a
+    // sidecar, never the media.
+    const runSubtitles = async () => {
+      const stem = sanitizeName(file.basename);
+      const have = this.subtitlesNamed(folder, stem);
+      if (have.length) {
+        this.log('subtitles already on disk:', have.join(', '));
+        return { ok: true, files: have, attempts: 0 };
+      }
+      const out = path.join(folder, this.mediaOutputTemplate(file));
+      const args = [
+        '--skip-download', '--write-auto-subs', '--write-subs',
+        '--sub-langs', this.settings.subtitleLangs || 'en.*',
+        '--sub-format', 'vtt/best',
+        '-o', out,
+      ];
+      const r = await this.ytDlpWithFallback(args, url, 'subtitles', notice);
+      if (!r.ok) return r;
+      let files = this.subtitlesNamed(folder, stem);
+      if (!files.length) return { ok: false, stderr: 'no subtitle file appeared', attempts: r.attempts };
+      if (this.settings.keepOneSubtitle) {
+        const kept = this.pruneSubtitles(folder, stem);
+        files = kept ? [kept] : files;
+      }
+      this.log('subtitles saved:', files.join(', '));
+      return { ok: true, files, attempts: r.attempts };
+    };
+
     // The merged video already contains the audio, so it is extracted locally
     // rather than fetched a second time. Audio-only has no video to work from.
     const extractInstead = mode === 'video_and_audio';
+    const subsOnly = mode === 'subs_only';
 
     const tasks = [];
     if (mode === 'video_only' || mode === 'video_and_audio') tasks.push(['video', runVideo]);
     if (mode === 'audio_only') tasks.push(['audio', runAudio]);
+    if (subsOnly) tasks.push(['subtitles', runSubtitles]);
 
     const guard = (kind, fn) =>
       fn().then(
@@ -1883,6 +1916,13 @@ module.exports = class ClipArchiver extends Plugin {
       for (const [kind, fn] of tasks) results.push(await guard(kind, fn));
 
       for (const [kind, r] of results) if (!r.ok) failures.push([kind, r]);
+
+      if (subsOnly) {
+        notice.hide();
+        for (const [kind, r] of failures) this.reportFailure(kind, r);
+        if (!failures.length) new Notice(`Subtitles saved for "${file.basename}".`);
+        return;
+      }
 
       if (extractInstead && saved.length) {
         const video = saved.find((f) => /\.(mp4|webm|mkv|mov|avi)$/i.test(f));
@@ -2045,6 +2085,19 @@ module.exports = class ClipArchiver extends Plugin {
 
   // Moves a finished file into the media folder, falling back to copy when the
   // temp folder is on a different volume, where rename cannot work.
+  // The subtitle sidecars written for a stem: name.<lang>.vtt and the like.
+  subtitlesNamed(folder, stem) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(folder);
+    } catch (_) {
+      return [];
+    }
+    const esc = stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const shape = new RegExp(`^${esc}\\.[A-Za-z0-9_-]+\\.(vtt|srt|ass)$`, 'i');
+    return entries.filter((n) => shape.test(n)).map((n) => path.join(folder, n));
+  }
+
   moveIntoFolder(from, folder) {
     try {
       if (!fs.existsSync(from)) return null;
@@ -3413,11 +3466,14 @@ class DownloadModeModal extends Modal {
     const b3 = row.createEl('button', { text: 'Audio' });
     b3.onclick = () => choose('audio_only');
 
+    const b5 = row.createEl('button', { text: 'Subtitles' });
+    b5.onclick = () => choose('subs_only');
+
     const b4 = row.createEl('button', { text: 'Skip' });
     b4.onclick = () => choose('skip');
 
     contentEl.createEl('p', {
-      text: 'Video + Audio saves the video file and a separate audio file. Video saves one file with sound. Audio saves the soundtrack only.',
+      text: 'Video + Audio saves the video file and a separate audio file. Video saves one file with sound. Audio saves the soundtrack only. Subtitles saves only the subtitle file, where the video would go.',
       attr: { style: 'font-size:var(--font-ui-smaller); opacity:.7; margin-top:12px;' },
     });
 
@@ -4220,6 +4276,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           .addOption('video_and_audio', 'Video + Audio')
           .addOption('video_only', 'Video')
           .addOption('audio_only', 'Audio')
+          .addOption('subs_only', 'Subtitles')
           .setValue(s.defaultDownloadMode)
           .onChange(async (v) => {
             s.defaultDownloadMode = v;

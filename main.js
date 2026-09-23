@@ -350,6 +350,7 @@ module.exports = class ClipArchiver extends Plugin {
       );
       this.log('watching for new notes');
       this.checkMediaExtended();
+      this.watchDriveLabels();
       this.catchUpStartupClips();
     });
 
@@ -522,6 +523,72 @@ module.exports = class ClipArchiver extends Plugin {
     });
     this.log('readable drive link added to the note body:', file.path);
   }
+
+  // The `media` property of a video outside the vault shows "4T-HDD: <file
+  // name>" instead of its long %-encoded file:/// address (1.14.0). His words,
+  // 2026-09-24: "what I mean is to have readable name in the property, not in the
+  // note's body." The value must stay the bare URL: Media Extended reads nothing
+  // else, and a labelled link in a property opens in the web browser. So this only
+  // changes what is drawn. Obsidian has no API for the properties panel; it draws a
+  // link as .metadata-link-inner[data-href], with a separate pencil for editing.
+  // **Its text must stay the address:** Media Extended 4.2.1 opens a click on a
+  // `media`/`video`/`audio` property only when the clicked element's textContent
+  // is a URL; replacing the text with the label sent the click to the web
+  // browser (tested 2026-09-24). So the text is hidden by CSS and the label drawn
+  // by a ::before pseudo-element, which textContent does not include and which
+  // leaves the element itself as the click target. Editing and the stored value
+  // are untouched. If Obsidian renames those classes the raw address simply shows again.
+  // Only After Clipping does this, not YT Playlists too, so the two never draw over
+  // each other; After Clipping is enabled in every vault.
+  watchDriveLabels() {
+    const SEL = '.metadata-property[data-property-key="media"] [data-href^="file:///Volumes/"]';
+    const label = (el) => {
+      const href = el.getAttribute('data-href') || '';
+      let p;
+      try {
+        p = decodeURIComponent(href.replace(/^file:\/\//i, '').split('#')[0]);
+      } catch (_) {
+        return;
+      }
+      const parts = p.split('/');
+      const text = `${parts[2]}: ${parts[parts.length - 1]}`;
+      if (el.getAttribute('data-arch-drive-label') !== text) el.setAttribute('data-arch-drive-label', text);
+      if (!el.classList.contains('arch-drive-label')) el.classList.add('arch-drive-label');
+    };
+    const scan = (root) => {
+      if (root.matches && root.matches(SEL)) label(root);
+      if (root.querySelectorAll) root.querySelectorAll(SEL).forEach(label);
+    };
+    // The property's own size is 0.875em of this element, which is set to 0 to
+    // hide the address, so the label is sized from the note's text size.
+    const style = document.createElement('style');
+    style.id = 'arch-after-clipping-drive-labels';
+    style.textContent =
+      '.metadata-link-inner.arch-drive-label{font-size:0 !important;}' +
+      '.metadata-link-inner.arch-drive-label::before{content:attr(data-arch-drive-label) !important;' +
+      'font-size:calc(var(--font-text-size, 16px) * 0.875) !important;display:inline !important;}';
+    document.head.appendChild(style);
+    const obs = new MutationObserver((muts) => {
+      for (const m of muts) {
+        // Obsidian redraws a property by swapping the text inside the same
+        // element, so a changed element is checked as well as a new one.
+        if (m.type === 'attributes') scan(m.target);
+        else {
+          if (m.target.nodeType === 1 && m.target.matches(SEL)) label(m.target);
+          for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
+        }
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-href'] });
+    this.register(() => {
+      obs.disconnect();
+      style.remove();
+      document.querySelectorAll('.arch-drive-label').forEach((el) => el.classList.remove('arch-drive-label'));
+    });
+    scan(document.body);
+  }
+
+
 
   // Videos outside the vault are played by Media Extended, which reads the
   // file:/// URL in `media`. That was tested on 4.2.1 only, the version Hoang

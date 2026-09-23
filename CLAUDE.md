@@ -157,6 +157,11 @@ only the body for an existing link: the frontmatter always holds the address, an
 checking the whole note made the first version add nothing, ever. Its `(` `)` are
 encoded, unlike `media`'s. `relink-videos.py` keeps the label in step with a rename.
 
+**The readable `media` label is After Clipping's alone** (`watchDriveLabels`, 1.14.0):
+CSS hides the text and a `::before` draws "4T-HDD: <file name>". Never change the
+element's text: Media Extended opens a property click only if the clicked element's
+`textContent` is a URL, and replacing it sent every click to the browser.
+
 **The drive helpers are copied word for word in both plugins; change both together.**
 `driveOf`, `driveMounted`, `checkMediaExtended` and `addDriveLinks`, and the way the outside folder is
 worked out (`externalVideoFolder`: `<setting>/<vault name>/<the vault-relative media

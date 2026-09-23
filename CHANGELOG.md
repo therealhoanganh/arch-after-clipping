@@ -6,7 +6,22 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.13.1 — current
+## 1.14.0 — current
+
+- **The `media` property reads "4T-HDD: <file name>" for a video outside the vault**,
+  instead of its long `%`-encoded `file:///` address. Display only: the stored value
+  stays the bare URL. His words: *"what I mean is to have readable name in the
+  property, not in the note's body."* **The element's text must stay the address:**
+  Media Extended 4.2.1 opens a click on a `media`/`video`/`audio` property only when
+  the clicked element's `textContent` is a URL. A first version replaced the text
+  and every click went to the web browser, which he caught, External Video Test
+  included. So CSS hides the text (`font-size:0`) and a `::before` draws the label
+  from a data attribute. `::before` is used because `::after` drew nothing. Obsidian
+  redraws a property by swapping the text inside the same element, so the watcher
+  checks changed elements as well as new ones. Tested in `TESTFIELD`: the label shows,
+  and a click opens Media Extended's window.
+
+## 1.13.1
 
 - **A readable link to a video outside the vault, at the top of the note body:**
   `[4T-HDD: <file name>](file:///…)`. `media` has to stay a bare `file:///` URL,

@@ -6,7 +6,25 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.11.0 — current
+## 1.12.0 — current
+
+- **A clipped video gets its length.** On by default (*Fill the video length*):
+  when a clip is a video and the note has no `duration`, or an empty one as the
+  Web Clipper template leaves it, the length is written there in whole minutes
+  rounded up, the same as ARCH YT Playlists writes on a synced video note. A
+  value already there is kept. YouTube titles come from oEmbed, which carries no
+  length, so the watch page is read for its `lengthSeconds`: one request with no
+  cookies, about a second, where a yt-dlp lookup takes seven to ten. Other hosts
+  get it from the yt-dlp metadata call they already made, which now prints the
+  duration too. New command, *Fill video length for this note*, for notes
+  clipped before. His words: *"there is one hidden feature in YT Playlist that I
+  want After Clipping to have by defaut, which is fetch video length. Like if I
+  sync video playlist, it will add video note that have video length in them.
+  How can I have that for After Clipping? The web clipper template don't have
+  that so we will need to fetch with plugin."* Tested in `TESTFIELD`: 6:03 → 7,
+  3:33 → 4 on a fresh clip, Dailymotion through yt-dlp → 248 s.
+
+## 1.11.0
 
 - **The four download commands hand a YT Playlists note to that plugin.** On a
   video note (`yt-playlist`) they call ARCH YT Playlists' own download with the

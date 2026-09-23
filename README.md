@@ -97,6 +97,7 @@ Add your own by dropping a `.py` file into `transformers/` and adding a rule tha
 | Download video for this note | media only: the video |
 | Download audio for this note | media only: the mp3 |
 | Download subtitles for this note | the subtitle files only, beside where the video would go |
+| Fill video length for this note | writes `duration` in whole minutes, for a note clipped before 1.12.0 or with the setting off |
 | Embed the downloaded media in this note | inserts the `![[file]]` embed |
 | Forget this note | clears it from the processed record so it can be archived again |
 | Restore the bundled transformer scripts | rewrites `gemini_chat.py` and `reddit_thread.py` from the copies inside `main.js` |

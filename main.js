@@ -151,6 +151,9 @@ const DEFAULT_SETTINGS = {
   linkDownloadedMedia: true,
   embedLocalMedia: true,
   renameNoteFromMedia: true,
+  // Writes the video's length into `duration`, in whole minutes rounded up,
+  // the way ARCH YT Playlists does. Never overwrites a value already there.
+  fillVideoLength: true,
   noteNameTemplate: '%(channel)s \u2014 %(title)s',
   noteTitleSource: 'filename', // filename | metadata
 
@@ -350,6 +353,21 @@ module.exports = class ClipArchiver extends Plugin {
         callback: () => this.withActiveNote((f) => this.downloadForNote(f, mode)),
       });
     }
+    this.addCommand({
+      id: 'fill-video-length-active-note',
+      name: 'Fill video length for this note',
+      callback: () =>
+        this.withActiveNote(async (f) => {
+          const url =
+            this.resolveSourceUrl(this.app.metadataCache.getFileCache(f)?.frontmatter) ||
+            this.extractUrlFromRawFrontmatter(await this.app.vault.read(f).catch(() => ''));
+          if (!url) return new Notice('This note has no source URL.');
+          // YouTube is answered by its page; anything else needs the yt-dlp call.
+          const youtube = /(?:youtube\.com|youtu\.be)/i.test(url);
+          const meta = youtube ? null : await this.fetchChannelAndTitle(url);
+          await this.fillVideoLength(f, url, meta, true);
+        }),
+    });
     this.addCommand({
       id: 'forget-active-note',
       name: 'Forget this note, so it can be archived again',
@@ -862,6 +880,11 @@ module.exports = class ClipArchiver extends Plugin {
         const name = this.noteNameFromMeta(meta, file);
         if (name) await this.renameNoteTo(file, name);
         lap('rename done');
+      }
+
+      if (this.settings.fillVideoLength && meta && meta.hasFormats) {
+        await this.fillVideoLength(file, sourceUrl, meta, false);
+        lap('length done');
       }
 
       let pendingMode = null;
@@ -2426,7 +2449,8 @@ module.exports = class ClipArchiver extends Plugin {
     // as NA, which is the signal that there is no media behind this URL.
     const base = [
       '--skip-download', '--ignore-no-formats-error', '--no-warnings',
-      '--print', '%(channel)s', '--print', '%(title)s', '--print', '%(format_id)s', url,
+      '--print', '%(channel)s', '--print', '%(title)s', '--print', '%(format_id)s',
+      '--print', '%(duration)s', url,
     ];
     for (const withCookies of [false, true]) {
       try {
@@ -2436,7 +2460,8 @@ module.exports = class ClipArchiver extends Plugin {
           const channel = lines[0] && lines[0] !== 'NA' ? lines[0] : '';
           const title = lines[1] && lines[1] !== 'NA' ? lines[1] : '';
           const hasFormats = !!(lines[2] && lines[2] !== 'NA');
-          if (channel || title) return { channel, title, hasFormats };
+          const duration = Number(lines[3]) > 0 ? Number(lines[3]) : null;
+          if (channel || title) return { channel, title, hasFormats, duration };
         }
       } catch (e) {
         this.log('metadata lookup failed:', String(e.message));
@@ -2444,6 +2469,54 @@ module.exports = class ClipArchiver extends Plugin {
       if (!this.settings.cookiesFile && !this.settings.cookiesFromBrowser) break;
     }
     return null;
+  }
+
+  // The video's length in seconds. The yt-dlp metadata call prints it on the way
+  // (meta.duration); a YouTube title comes from oEmbed instead, which has no
+  // length, so the watch page is read for its "lengthSeconds": one request with
+  // no cookies, about a second, where yt-dlp takes seven to ten.
+  async fetchVideoSeconds(url, meta) {
+    if (meta && meta.duration) return meta.duration;
+    if (!/(?:youtube\.com|youtu\.be)/i.test(url)) return null;
+    try {
+      const res = await this.fetchViaNode(url, { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en' });
+      if (res.status === 200) {
+        const m = Buffer.from(res.arrayBuffer).toString('utf8').match(/"lengthSeconds":"(\d+)"/);
+        if (m && Number(m[1]) > 0) return Number(m[1]);
+      }
+      this.log('no length found on the YouTube page:', url, res.status);
+    } catch (e) {
+      this.log('YouTube page lookup failed:', String(e.message));
+    }
+    return null;
+  }
+
+  // Fills `duration` when the note has none (absent, or empty as a Web Clipper
+  // template leaves it). A value already there is a person's or an earlier run's
+  // and is kept.
+  async fillVideoLength(file, url, meta, manual) {
+    const filled = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+    const cached = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null;
+    if (cached && filled(cached.duration)) {
+      this.log('duration already set, left alone:', file.path, cached.duration);
+      if (manual) new Notice(`"${file.basename}" already has a duration: ${cached.duration}.`);
+      return;
+    }
+    const seconds = await this.fetchVideoSeconds(url, meta);
+    if (!seconds) {
+      this.log('video length not found for', url);
+      if (manual) new Notice('Could not find the length of this video.');
+      return;
+    }
+    const minutes = Math.ceil(seconds / 60);
+    let wrote = false;
+    await this.setFrontmatter(file, (f) => {
+      if (filled(f.duration)) return;
+      f.duration = minutes;
+      wrote = true;
+    });
+    this.log(wrote ? `duration ${minutes} min (${seconds}s) written:` : 'duration already set, left alone:', file.path);
+    if (manual && wrote) new Notice(`Duration: ${minutes} min.`);
   }
 
   // The note's own name wins by default: if you tidied the title by hand, that
@@ -4503,6 +4576,16 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       .addToggle((t) =>
         t.setValue(s.renameNoteFromMedia).onChange(async (v) => {
           s.renameNoteFromMedia = v;
+          await this.save();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName('Fill the video length')
+      .setDesc('Writes the length into "duration", in whole minutes rounded up, the way ARCH YT Playlists does. Only when the note has no duration yet; a value already there is kept. On YouTube it reads the video page, about a second.')
+      .addToggle((t) =>
+        t.setValue(s.fillVideoLength).onChange(async (v) => {
+          s.fillVideoLength = v;
           await this.save();
         })
       );

@@ -93,7 +93,10 @@ Add your own by dropping a `.py` file into `transformers/` and adding a rule tha
 | Archive this clip | the whole pipeline, ignoring the already-processed record |
 | Download images for this note | images only, ignoring the folder list |
 | Run the transformer on this note | body rewrite only |
-| Download media for this note | video and audio only |
+| Download video and audio for this note | media only: the video, with the mp3 taken from it |
+| Download video for this note | media only: the video |
+| Download audio for this note | media only: the mp3 |
+| Download subtitles for this note | the subtitle files only, beside where the video would go |
 | Embed the downloaded media in this note | inserts the `![[file]]` embed |
 | Forget this note | clears it from the processed record so it can be archived again |
 | Restore the bundled transformer scripts | rewrites `gemini_chat.py` and `reddit_thread.py` from the copies inside `main.js` |

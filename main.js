@@ -333,11 +333,23 @@ module.exports = class ClipArchiver extends Plugin {
       name: 'Transform this note with its site script',
       callback: () => this.withActiveNote((f) => this.doTransform(f, null, true)),
     });
-    this.addCommand({
-      id: 'download-media-active-note',
-      name: 'Download media for this note',
-      callback: () => this.withActiveNote((f) => this.doMedia(f, null, true)),
-    });
+    // One command per download choice, rather than one that opens the choice
+    // dialog: YT Playlists already has a "Download media for this note", and two
+    // identical names in the palette could not be told apart. Each command is
+    // the choice itself, so it skips the dialog and any choice remembered for
+    // the session.
+    for (const [mode, id, what] of [
+      ['video_and_audio', 'download-video-and-audio-active-note', 'video and audio'],
+      ['video_only', 'download-video-active-note', 'video'],
+      ['audio_only', 'download-audio-active-note', 'audio'],
+      ['subs_only', 'download-subtitles-active-note', 'subtitles'],
+    ]) {
+      this.addCommand({
+        id,
+        name: `Download ${what} for this note`,
+        callback: () => this.withActiveNote((f) => this.doMedia(f, null, true, null, mode)),
+      });
+    }
     this.addCommand({
       id: 'forget-active-note',
       name: 'Forget this note, so it can be archived again',
@@ -1685,7 +1697,7 @@ module.exports = class ClipArchiver extends Plugin {
     return this.settings.probeUnknownUrls;
   }
 
-  async doMedia(file, sourceUrl, manual = false, pendingMode = null) {
+  async doMedia(file, sourceUrl, manual = false, pendingMode = null, chosenMode = null) {
     const url =
       sourceUrl ||
       this.resolveSourceUrl(this.app.metadataCache.getFileCache(file)?.frontmatter) ||
@@ -1751,7 +1763,7 @@ module.exports = class ClipArchiver extends Plugin {
       return;
     }
 
-    let mode = this.sessionMode;
+    let mode = chosenMode || this.sessionMode;
     if (!mode && pendingMode) mode = await pendingMode;
     if (!mode) {
       mode = this.settings.askDownloadMode

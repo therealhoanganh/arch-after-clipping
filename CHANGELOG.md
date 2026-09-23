@@ -6,7 +6,19 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.9.3 — current
+## 1.10.0 — current
+
+- ***Download media for this note* is four commands now**: *Download video and
+  audio for this note*, *Download video for this note*, *Download audio for this
+  note* and *Download subtitles for this note*. Each is the choice itself, so it
+  skips the choice dialog and any choice remembered for the session. His reason:
+  YT Playlists has a *Download media for this note* too, so the palette showed
+  two identical names, and the subtitles choice was hidden inside a dialog; he
+  searched the palette for a subtitles command and found none. YT Playlists is
+  unchanged. The automatic pass still asks, as before. No vault had a hotkey on
+  the old command.
+
+## 1.9.3
 
 - **A fourth download choice: Subtitles.** In the prompt and as a default
   choice, matching YT Playlists 1.5.1. Fetches only the subtitle files, into

@@ -139,7 +139,7 @@ is the usual way a first Obsidian release silently fails. The tag must equal the
 public release; bump `manifest.json`, add a `CHANGELOG.md` entry and move the
 `— current` marker before cutting the next one.
 
-**Distribution is BRAT, and it is installed in every vault under ~/Downloads except TESTFIELD, which is symlinked to this repo.**
+**Distribution is BRAT, and it is installed in every vault under ~/Downloads that has BRAT except TESTFIELD, which is symlinked to this repo, and in ~/Documents.**
 An installed plugin folder is an ordinary directory BRAT wrote, not a symlink back
 to this repo, so an edit here reaches no vault until a release is cut. Versions
 have drifted: as of 1.7.0 the vaults under `~/Downloads` carry 1.4.0, 1.6.0 and —
@@ -147,7 +147,9 @@ in two of them — **5.2.0**, a leftover from the numbering used before the
 renumbering this changelog describes. Obsidian and BRAT compare version strings, so
 `5.2.0` is newer than anything this repo will ship: those two will never be offered
 a 1.x update and have to be removed and reinstalled to move across. Check what a
-vault actually reports before assuming a release reached it.
+vault actually reports before assuming a release reached it. Checked 2026-09-23: the
+ten BRAT vaults under `~/Downloads` and `~/Documents` all report 1.9.3, so the two
+5.2.0 installs have since been replaced.
 
 **A changed default only reaches a vault that has no `data.json`.** Settings load as
 `Object.assign({}, DEFAULT_SETTINGS, saved)`, so any value the user has ever saved
@@ -175,9 +177,11 @@ Two specific traps, both of which have already caused bugs:
 - **A clean test run is not evidence.** The mock has now missed five real Obsidian
   APIs: `_children`, `register`, `registerMarkdownPostProcessor`, `Modal.open`, and
   `registerEvent`. It catches logic bugs and nothing else.
-## Coupling to ARCH X Archive
 
-ARCH X Archive writes hundreds of notes carrying a `url` that points at
+## Coupling to ARCH X Twitter
+
+ARCH X Twitter (ARCH X Archive when this was written; its plugin id changed from
+`arch-x-archive` to `arch-x-twitter`) writes hundreds of notes carrying a `url` that points at
 `x.com/<user>/status/<id>`, which is exactly the shape this plugin exists to
 process. On its first run it took every one of them, ran a full yt-dlp metadata
 probe — about **three seconds per note** — and downloaded a video and an mp3 into
@@ -185,12 +189,13 @@ the profile's folder. At that plugin's intended scale, a few hundred profiles,
 that is tens of thousands of probes nobody asked for.
 
 `otherArchKeys` now defaults to `['yt-playlist', 'dl-all', 'x-author', 'x-name']`.
-`x-author` and `x-name` are on **both** of ARCH X Archive's note types, which is
-why two keys are enough there.
+`x-author` and `x-name` are on **both** of ARCH X Twitter's note types, which is
+why two keys are enough there. Since then a profile note carries only `x-name`, which is
+enough, because `otherArchKeys` matches any one of its names.
 
 A saved `otherArchKeys` shadows the default entirely, so `loadSettings` appends
 any missing default markers to a saved list rather than replacing it — a vault
-configured before ARCH X Archive existed would otherwise keep probing. A key the
+configured before ARCH X Twitter existed would otherwise keep probing. A key the
 user added by hand survives that.
 
 ## Rewriting history means repointing every tag

@@ -6,7 +6,27 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.10.0 — current
+## 1.11.0 — current
+
+- **The four download commands hand a YT Playlists note to that plugin.** On a
+  video note (`yt-playlist`) they call ARCH YT Playlists' own download with the
+  choice made, so the file lands in the playlist's media folder beside the rest
+  of the playlist, named and pruned the way that plugin does it; on a playlist
+  note (`dl-all`) they download the whole playlist. Before, a video note
+  downloaded here went into this plugin's own media folder, apart from its
+  playlist. Without YT Playlists enabled, a video note is downloaded here as
+  before and a playlist note is refused. **A note recognised by
+  `otherArchTags` (a channel note) is refused**: its `url` is a channel address,
+  and the manual command used to hand it to yt-dlp, which downloads the whole
+  channel. YT Playlists 1.6.0 dropped its own single-note command the same day,
+  so single notes are this plugin's job and playlist notes that one's.
+  His words: *"Also change YT playlist 'Dowload media for this note' to 'Dowload media
+  for this playlist note', better clarity"*, and then *"only run when in playlist note,
+  the reason is we already have after clipping for individual video/note, we're just
+  doing bad job at making the two plugins in synergy with each other, please fix
+  that!"*
+
+## 1.10.0
 
 - ***Download media for this note* is four commands now**: *Download video and
   audio for this note*, *Download video for this note*, *Download audio for this

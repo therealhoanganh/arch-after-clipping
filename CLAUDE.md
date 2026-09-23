@@ -99,7 +99,17 @@ downloaded a video's media.
 
 ## Coupling to ARCH YT Playlists
 
-Separate plugin, separate repo, no shared code or runtime state. One link exists:
+Separate plugin, separate repo, no shared code. Two links exist. **The second, since
+1.11.0, is a runtime call**: the four *Download … for this note* commands go through
+`downloadForNote`, which hands a video note (`yt-playlist`) to
+`app.plugins.getPlugin('arch-yt-playlists').bulkDownload([file], mode)` and a
+playlist note (`dl-all`) to its `downloadWholePlaylist(file, mode)`, so a playlist's
+media stays in that plugin's folder. The division is his: single notes are this
+plugin's, playlist notes are YT Playlists' ("we already have after clipping for
+individual video/note"). **Renaming either method, or the mode strings
+(`video_and_audio`, `video_only`, `audio_only`, `subs_only`), breaks the handoff**:
+a video note then quietly falls back to this plugin's own download, in the wrong
+folder. The first link:
 notes carrying `yt-playlist` (video notes) or `dl-all` (playlist notes) belong to
 that plugin, and the automatic pass here skips them. The property names live in
 the `otherArchKeys` setting.

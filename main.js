@@ -347,7 +347,7 @@ module.exports = class ClipArchiver extends Plugin {
       this.addCommand({
         id,
         name: `Download ${what} for this note`,
-        callback: () => this.withActiveNote((f) => this.doMedia(f, null, true, null, mode)),
+        callback: () => this.withActiveNote((f) => this.downloadForNote(f, mode)),
       });
     }
     this.addCommand({
@@ -687,6 +687,42 @@ module.exports = class ClipArchiver extends Plugin {
     if (!folders.length) return true; // empty list means every folder
     const p = file.path;
     return folders.some((f) => p === f || p.startsWith(f + '/'));
+  }
+
+  // The one entry point for the four Download ... for this note commands.
+  // A note owned by ARCH YT Playlists is handed to that plugin with the choice
+  // made, so a video lands in its playlist's own media folder beside the rest
+  // and dl-all stays right; a playlist note downloads the whole playlist. When
+  // YT Playlists is not enabled here, a video note is downloaded by this plugin
+  // and a playlist note is refused. A note recognised by tag (a channel note)
+  // is always refused: its url is a channel address, and yt-dlp given one
+  // downloads the whole channel.
+  async downloadForNote(file, mode) {
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null;
+    const content = await this.app.vault.read(file).catch(() => '');
+    const has = (key) => (fm && fm[key] !== undefined) || this.rawHasKey(content, key);
+    const tagged = (this.settings.otherArchTags || []).find(
+      (tag) => this.fmHasTag(fm, tag) || this.rawHasTag(content, tag)
+    );
+    if (tagged) {
+      this.log(`not downloading ${file.path}: tagged ${tagged}, another ARCH plugin's note`);
+      new Notice(`"${file.basename}" is tagged ${tagged}, so there is nothing here to download.`, 8000);
+      return;
+    }
+    const yt = this.app.plugins?.getPlugin?.('arch-yt-playlists');
+    if (has('dl-all')) {
+      if (yt && typeof yt.downloadWholePlaylist === 'function') {
+        this.log(`handing playlist note ${file.path} to ARCH YT Playlists as ${mode}`);
+        return yt.downloadWholePlaylist(file, mode);
+      }
+      new Notice('This is an ARCH YT Playlists playlist note. Enable that plugin to download it.', 10000);
+      return;
+    }
+    if (has('yt-playlist') && yt && typeof yt.bulkDownload === 'function') {
+      this.log(`handing video note ${file.path} to ARCH YT Playlists as ${mode}`);
+      return yt.bulkDownload([file], mode);
+    }
+    return this.doMedia(file, null, true, null, mode);
   }
 
   withActiveNote(fn) {

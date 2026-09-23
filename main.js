@@ -170,6 +170,11 @@ const DEFAULT_SETTINGS = {
   // there, under the vault's name and the folders it would have had in the
   // vault; subtitles and audio stay in the vault. Empty keeps it in the vault.
   externalVideoFolder: '',
+  // The script that makes notes' file:/// links follow a video moved or renamed
+  // on the drive (backup-strategy/relink-videos.py). It also runs after every
+  // backup; the command is for right after reorganising the drive. Filled in
+  // when found at its usual place.
+  relinkScript: '',
   quality: 'bestvideo*+bestaudio/best',
   audioFormat: 'mp3',
   cookiesFromBrowser: '',
@@ -404,6 +409,11 @@ module.exports = class ClipArchiver extends Plugin {
         }),
     });
     this.addCommand({
+      id: 'relink-drive-videos',
+      name: 'Relink videos on the outside drive',
+      callback: () => this.relinkDriveVideos(),
+    });
+    this.addCommand({
       id: 'forget-active-note',
       name: 'Forget this note, so it can be archived again',
       callback: () => this.withActiveNote((f) => this.forgetNote(f)),
@@ -605,6 +615,40 @@ module.exports = class ClipArchiver extends Plugin {
     else if (!on) this.log(`Media Extended ${mx.version} is installed but turned off: file:/// videos will open outside Obsidian`);
     else if (mx.version === TESTED) this.log(`Media Extended ${mx.version}, the version videos outside the vault were tested with`);
     else this.log(`Media Extended ${mx.version}, not the tested ${TESTED}: check that file:/// videos still play`);
+  }
+
+  // Runs relink-videos.py, which rewrites every note's file:/// video link whose
+  // file moved or was renamed on the drive, in every vault, and logs each change
+  // in the backup's Folder History.md. It already runs after each backup; this
+  // is the button for right after moving videos in Finder. The script is the
+  // one copy of that logic, so the plugin only starts it.
+  async relinkDriveVideos() {
+    let script = String(this.settings.relinkScript || '').trim().replace(/^~(?=\/)/, os.homedir());
+    if (!script) {
+      const usual = path.join(os.homedir(), 'Documents/backup-strategy/relink-videos.py');
+      if (fs.existsSync(usual)) {
+        script = this.settings.relinkScript = usual;
+        await this.saveSettings();
+        this.log(`relink script found at ${usual}, saved in settings`);
+      }
+    }
+    if (!script || !fs.existsSync(script)) {
+      this.log(`relink: no script at "${script}"`);
+      return new Notice('Relink script not found. Set it under "Relink script" in ARCH After Clipping\'s settings.');
+    }
+    const notice = new Notice('Relinking videos on the outside drive…', 0);
+    this.log(`relink: running ${script}`);
+    try {
+      const r = await this.runProcess('/usr/bin/python3', [script], { timeoutMs: 10 * 60 * 1000 });
+      const last = r.stdout.trim().split('\n').pop() || '';
+      this.log(`relink: exit ${r.code}: ${last}${r.stderr ? '\n' + r.stderr : ''}`);
+      notice.hide();
+      new Notice(r.code === 0 ? `Relink videos: ${last}` : `Relink videos failed (exit ${r.code}). See the console.`, 10000);
+    } catch (e) {
+      notice.hide();
+      this.log(`relink: could not start: ${e.message}`);
+      new Notice('Relink videos could not start python3. See the console.');
+    }
   }
 
   log(...args) {
@@ -4594,6 +4638,22 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           .setValue(s.externalVideoFolder || '')
           .onChange(async (v) => {
             s.externalVideoFolder = v.trim();
+            await this.save();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Relink script')
+      .setDesc(
+        'relink-videos.py, which makes notes\' file:/// links follow a video moved or renamed on the drive. ' +
+          'Run it with the command "Relink videos on the outside drive". Filled in when found in ~/Documents/backup-strategy.'
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder('~/Documents/backup-strategy/relink-videos.py')
+          .setValue(s.relinkScript || '')
+          .onChange(async (v) => {
+            s.relinkScript = v.trim();
             await this.save();
           })
       );

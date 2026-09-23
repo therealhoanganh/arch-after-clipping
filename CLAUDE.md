@@ -162,6 +162,12 @@ CSS hides the text and a `::before` draws "4T-HDD: <file name>". Never change th
 element's text: Media Extended opens a property click only if the clicked element's
 `textContent` is a URL, and replacing it sent every click to the browser.
 
+**The *Relink videos on the outside drive* command is After Clipping's alone too**
+(`relinkDriveVideos`, 1.15.0). It only runs `backup-strategy/relink-videos.py` (path in
+the *Relink script* setting, filled in when found); the relinking logic lives in that
+script, one copy, which also runs after every backup. Never port the logic into the
+plugin.
+
 **The drive helpers are copied word for word in both plugins; change both together.**
 `driveOf`, `driveMounted`, `checkMediaExtended` and `addDriveLinks`, and the way the outside folder is
 worked out (`externalVideoFolder`: `<setting>/<vault name>/<the vault-relative media

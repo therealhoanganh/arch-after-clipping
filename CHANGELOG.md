@@ -6,7 +6,25 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.14.0 — current
+## 1.15.0 — current
+
+- **A palette command, *Relink videos on the outside drive***, which runs
+  `backup-strategy/relink-videos.py`: every note's `file:///` link to a video that was
+  moved or renamed on the drive is rewritten to where the video is now, in every
+  vault, and the result shows in a notice. The script already runs after every
+  backup; this is for right after reorganising the drive in Finder. He had looked
+  for it in the palette and found only a link in `Backup Strategy.md`; his words: *"I
+  think you should add a command either way."* The plugin only starts the script, so
+  the relinking logic has one copy. A new setting, *Relink script*, holds its path and
+  fills itself in when the script is at `~/Documents/backup-strategy/`. In After
+  Clipping only, not YT Playlists, because the drive label is already After
+  Clipping's and the two divide work rather than each carrying the same feature.
+  Tested in `TESTFIELD`: renaming the test video on the drive and running the command
+  moved both notes' links to the new name, including a `#t=` timestamp, and renaming
+  it back returned both notes byte for byte. The test found a bug in the script,
+  fixed there (see `backup-strategy/CHANGELOG.md`).
+
+## 1.14.0
 
 - **The `media` property reads "4T-HDD: <file name>" for a video outside the vault**,
   instead of its long `%`-encoded `file:///` address. Display only: the stored value

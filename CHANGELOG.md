@@ -6,7 +6,51 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.15.0 — current
+## 1.16.0 — current
+
+- **Where the video goes is a choice in the download popup.** A "Save the video"
+  dropdown under the Video + Audio buttons: *On 4T-HDD* or *In the vault*. It is
+  preset to the default, which the commands also use. His words, 2026-09-24: *"make
+  sure the default location works with command, and also have default location in
+  download popup too along with Video + Audio ..., we could have it as a slide down
+  option or something."* The default is the drive when *Videos outside the vault* is
+  set, except in a folder listed in the new setting *Keep videos in the vault in these
+  folders*: the sensitive ones, like Psycho-history's `Temp Videos`, which his table
+  keeps on the Mac (*"based on vaults and materials"*). He saw it open, and confirmed:
+  *"Yes, it open and there is location slide down in it."*
+- **An unplugged drive no longer blocks a single download.** The drive's entry is
+  disabled, and the video goes in the vault. Being there only for that reason, it is
+  queued to move to the drive once the drive is back. A run of several videos with no
+  choice made still refuses, so a whole playlist never lands on the Mac by default;
+  choosing *In the vault* in the popup is what allows it. Before, every download to an
+  unplugged drive was refused.
+- **Subtitles in Media Extended.** After a video is saved to the drive, a Media Extended
+  library note (`media-lib/url-<id>.md`, with `mx-uid`, `video:` and `subtitles:`) lists
+  its `.vtt`, which stays in the vault, so the transcript works. He checked the route
+  by eye (*"Both show subtitles!"*); a probe of the player's native text tracks had
+  stayed empty meanwhile. The same note as `backup-strategy/link-subtitles.py`, which
+  wrote it for the 294 videos already on the drive.
+- Tested in `TESTFIELD` with a short video:
+  - a download to the drive, then its library note;
+  - a download with the drive pointed somewhere unplugged: vault, queued, then moved
+    once the setting was back;
+  - YT Playlists refusing a multi-video run and falling back on a single note.
+- **Moving a video from the vault to the drive** (After Clipping only). The
+  queued videos move when the drive is back, within a minute, if *Move videos to the
+  drive when it is back* is on. His words: *"Should we make auto move video once plugin?
+  I think a toggle on off in setting will do."* A video saved in the vault by choice is
+  never queued. The move:
+  1. copies the video to the drive and checks the size;
+  2. switches every note whose `media` links it to the `file:///` address;
+  3. removes its embed, and adds the readable drive link and the library note;
+  4. sends the vault copy to the trash.
+
+  Two commands: *Move videos waiting for the drive now*, and *Move this note's video to
+  the drive*, for any note's video. The second is the in-Obsidian form of
+  `move-videos-out.py`. YT Playlists hands its queued videos over through
+  `queueDriveMove`.
+
+## 1.15.0
 
 - **A palette command, *Relink videos on the outside drive***, which runs
   `backup-strategy/relink-videos.py`: every note's `file:///` link to a video that was

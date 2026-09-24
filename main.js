@@ -366,6 +366,7 @@ module.exports = class ClipArchiver extends Plugin {
       this.checkMediaExtended();
       this.watchDriveLabels();
       this.watchDriveQueue();
+      this.watchDeletedDriveNotes();
       this.catchUpStartupClips();
     });
 
@@ -554,6 +555,120 @@ module.exports = class ClipArchiver extends Plugin {
     this.log('readable drive link added to the note body:', file.path);
   }
 
+  // ---- Deleting a note whose video is on the drive (1.17.0) ----
+  // Obsidian's own "Delete unlinked attachments" only offers vault files the
+  // note links. A video on the drive is a file:/// address it cannot see or
+  // delete, and the note's .vtt is linked only from its Media Extended library
+  // note, if at all. So deleting such a note left the video, its subtitles and
+  // its library note behind; he found this on 2026-09-24 ("delete attachment
+  // when delete files doesn't work"). Obsidian reports a deleted note with its
+  // last metadata, which still holds `media`. Deletions within half a second
+  // are gathered, so deleting a folder asks once. Anything another note still
+  // links is never offered. The drive video goes to the macOS Trash, the vault
+  // files to the vault's trash: both recoverable. Vault files the note linked
+  // itself (an .mp3 in media) stay with Obsidian's own popup, so the two never
+  // offer the same file.
+  watchDeletedDriveNotes() {
+    this.deletedDriveNotes = [];
+    this.registerEvent(
+      this.app.metadataCache.on('deleted', (file, prev) => {
+        const fm = prev && prev.frontmatter;
+        if (!fm || fm['mx-uid']) return;
+        const raw = fm.media;
+        const urls = (Array.isArray(raw) ? raw : raw ? [raw] : [])
+          .map((v) => String(v).trim())
+          .filter((v) => /^file:\/\/\/Volumes\//i.test(v) && /\.(mp4|webm|mkv|mov|avi|m4v)(#.*)?$/i.test(v));
+        if (!urls.length) return;
+        this.deletedDriveNotes.push({ path: file.path, urls });
+        window.clearTimeout(this.deletedDriveTimer);
+        this.deletedDriveTimer = window.setTimeout(() => this.offerDriveMediaDelete(), 500);
+      })
+    );
+  }
+
+  async offerDriveMediaDelete() {
+    const notes = this.deletedDriveNotes.splice(0);
+    if (!notes.length) return;
+    const stillLinked = new Set();
+    for (const md of this.app.vault.getMarkdownFiles()) {
+      const fm = this.app.metadataCache.getFileCache(md)?.frontmatter;
+      if (!fm || fm['mx-uid']) continue;
+      const raw = fm.media;
+      for (const v of Array.isArray(raw) ? raw : raw ? [raw] : []) stillLinked.add(String(v).trim().split('#')[0]);
+    }
+    const groups = [];
+    for (const n of notes) {
+      const items = [];
+      for (const u of n.urls) {
+        const url = u.split('#')[0];
+        if (stillLinked.has(url)) {
+          this.log('another note still links this video, not offered:', url);
+          continue;
+        }
+        let abs;
+        try {
+          abs = decodeURIComponent(url.replace(/^file:\/\//i, ''));
+        } catch (_) {
+          continue;
+        }
+        const drive = path.basename(driveOf(abs) || '/Volumes/drive');
+        if (!driveMounted(abs)) items.push({ kind: 'drive', abs, label: `${path.basename(abs)} on ${drive}`, off: `${drive} is not plugged in, so the video stays` });
+        else if (fs.existsSync(abs)) {
+          const mb = (fs.statSync(abs).size / 1048576).toFixed(1);
+          items.push({ kind: 'drive', abs, label: `${path.basename(abs)} on ${drive} (${mb} MB)` });
+        }
+        const lib = this.app.vault.getMarkdownFiles().find((f) => {
+          const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
+          return fm && fm['mx-uid'] && String(fm.video || '').split('#')[0] === url;
+        });
+        const subs = new Set();
+        if (lib) {
+          for (const l of this.app.metadataCache.getFileCache(lib)?.frontmatterLinks || []) {
+            const tf = this.app.metadataCache.getFirstLinkpathDest(l.link.split('#')[0], lib.path);
+            if (tf) subs.add(tf);
+          }
+        }
+        const stem = path.basename(abs).replace(/\.[^.]+$/, '');
+        for (const tf of this.app.vault.getFiles()) {
+          if (/^(vtt|srt|ass)$/i.test(tf.extension) && tf.name.startsWith(stem + '.')) subs.add(tf);
+        }
+        for (const tf of subs) {
+          const others = Object.entries(this.app.metadataCache.resolvedLinks).some(
+            ([src, to]) => to[tf.path] && src !== (lib && lib.path)
+          );
+          if (!others) items.push({ kind: 'vault', file: tf, label: `${tf.name} (subtitles, in the vault)` });
+        }
+        if (lib) items.push({ kind: 'vault', file: lib, label: `${lib.name} (Media Extended library note)` });
+      }
+      if (items.length) groups.push({ note: n.path, items });
+    }
+    if (!groups.length) return;
+    new DriveMediaDeleteModal(this.app, groups, async () => {
+      let done = 0;
+      const failed = [];
+      for (const g of groups) {
+        for (const it of g.items) {
+          if (it.off) continue;
+          try {
+            if (it.kind === 'drive') await require('electron').shell.trashItem(it.abs);
+            else await this.app.fileManager.trashFile(it.file);
+            done++;
+            this.log('deleted with its note:', it.kind === 'drive' ? it.abs : it.file.path);
+          } catch (e) {
+            failed.push(it.label);
+            console.warn('[ArchAfterClipping] could not delete', it.label, e);
+          }
+        }
+      }
+      new Notice(
+        failed.length
+          ? `Deleted ${done} file(s); ${failed.length} could not be deleted. See the console.`
+          : `Deleted ${done} file(s) with the note${groups.length > 1 ? 's' : ''}.`,
+        8000
+      );
+    }).open();
+  }
+
   // ---- Moving a video from the vault to the drive (1.16.0) ----
   // A video that went into the vault only because the drive was not plugged
   // in is queued here, by this plugin or by ARCH YT Playlists (which calls
@@ -637,6 +752,10 @@ module.exports = class ClipArchiver extends Plugin {
         return m && this.app.metadataCache.getFirstLinkpathDest(m[1].trim(), md.path)?.path === tf.path;
       });
     });
+    if (!linking.length) {
+      fs.unlinkSync(dest);
+      return { ok: false, keep: false, why: 'no note links it any more' };
+    }
     const esc = tf.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     for (const md of linking) {
       await this.app.fileManager.processFrontMatter(md, (fm) => {
@@ -4202,6 +4321,45 @@ const GUIDE = [
    'Set up external tools reports tool versions and flags a yt-dlp build old ' +
    'enough to cause 403 errors, which is the usual reason a download fails.'],
 ];
+
+// The popup for deleting a note whose video is on the drive (1.17.0).
+class DriveMediaDeleteModal extends Modal {
+  constructor(app, groups, onDelete) {
+    super(app);
+    this.groups = groups;
+    this.onDelete = onDelete;
+  }
+
+  onOpen() {
+    const { contentEl, titleEl } = this;
+    titleEl.setText(this.groups.length > 1 ? "Delete these notes' media too?" : "Delete this note's media too?");
+    for (const g of this.groups) {
+      contentEl.createEl('p', { text: g.note.replace(/\.md$/, ''), attr: { style: 'font-weight:600; margin-bottom:4px;' } });
+      const ul = contentEl.createEl('ul', { attr: { style: 'margin-top:0;' } });
+      for (const it of g.items) {
+        const li = ul.createEl('li', { text: it.label });
+        if (it.off) li.createEl('div', { text: it.off, attr: { style: 'font-size:var(--font-ui-smaller); opacity:.7;' } });
+      }
+    }
+    contentEl.createEl('p', {
+      text: 'The video goes to the macOS Trash and the rest to the vault trash, so nothing is lost until the trash is emptied.',
+      attr: { style: 'font-size:var(--font-ui-smaller); opacity:.7;' },
+    });
+    const row = contentEl.createDiv({ cls: 'modal-button-container' });
+    const del = row.createEl('button', { text: 'Delete', cls: 'mod-warning' });
+    del.onclick = () => {
+      this.close();
+      this.onDelete();
+    };
+    const keep = row.createEl('button', { text: 'Keep' });
+    keep.onclick = () => this.close();
+    keep.focus();
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
 
 class GuideModal extends Modal {
   constructor(app, plugin) {

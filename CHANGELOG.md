@@ -6,7 +6,31 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.16.0 — current
+## 1.17.0 — current
+
+- **Deleting a note whose video is on the drive asks about its media.** Obsidian's own
+  *Delete unlinked attachments* offers only vault files the note links. A drive video
+  is a `file:///` address it can neither see nor delete, and the `.vtt` is linked only
+  from the Media Extended library note, if at all. So deleting such a note left the
+  video, its subtitles and its library note behind. His words: *"delete attrachment
+  when delete files doesn't work. Like I just tried delete a youtube short note and it
+  didn't show delete attrachment popup along with it."*
+- The popup, *Delete this note's media too?*, is After Clipping's own. It lists:
+  - the video on the drive, with its size;
+  - its subtitles in the vault;
+  - its library note.
+- On *Delete*, the video goes to the macOS Trash (on the drive, `.Trashes`) and the
+  rest to the vault trash.
+- The rules around it:
+  - Deleting a folder asks once for all its notes.
+  - Anything another note still links is never offered.
+  - With the drive unplugged, the video is listed as staying.
+  - Vault files the note linked itself stay with Obsidian's popup.
+- A queued video whose note was deleted is no longer moved to the drive.
+- Tested in `TESTFIELD`: the popup listed all three, and *Delete* sent each to the
+  right trash. His answer to the design: *"Yes, do what you think is best."*
+
+## 1.16.0
 
 - **Where the video goes is a choice in the download popup.** A "Save the video"
   dropdown under the Video + Audio buttons: *On 4T-HDD* or *In the vault*. It is

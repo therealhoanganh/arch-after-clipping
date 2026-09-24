@@ -170,6 +170,8 @@ plugin.
 
 **Where a video goes, and its library note (After Clipping 1.16.0, YT Playlists 1.8.0).** `keepsVideosInVault`, `videoPlace`, `writeLibraryNote` and the `renderPlaceChoice` dropdown are copied word for word in both plugins, like the drive helpers below; change them together. `writeLibraryNote` also matches `backup-strategy/link-subtitles.py`. The move queue (`queueDriveMove`, `moveVideoToDrive`) lives in After Clipping only, and YT Playlists calls `queueDriveMove` by name: **renaming it silently leaves YT Playlists' fallback videos in the vault.** Never test the subtitles by probing the player's native text tracks; they stayed empty while subtitles showed (2026-09-24). Look, or ask him to.
 
+**Deleting a note with a drive video is After Clipping's too** (`watchDeletedDriveNotes`, 1.17.0). It listens to `metadataCache` `deleted`, whose previous metadata still holds `media`, and offers the drive video (sent to the macOS Trash with Electron's `shell.trashItem`), its subtitles and its library note. It never offers what another note still links, nor what Obsidian's own *Delete unlinked attachments* popup offers.
+
 **The drive helpers are copied word for word in both plugins; change both together.**
 `driveOf`, `driveMounted`, `checkMediaExtended` and `addDriveLinks`, and the way the outside folder is
 worked out (`externalVideoFolder`: `<setting>/<vault name>/<the vault-relative media

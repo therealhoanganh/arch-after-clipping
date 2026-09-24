@@ -187,6 +187,19 @@ all four places, or not at all.
 Media Extended ever changes version, retest both points before trusting it. Only
 playback depends on it: the "already downloaded?" check reads the disk.
 
+## One computer does the automatic work (1.18.0)
+
+The vaults are mirrored between the Mac and an Ubuntu PC (Syncthing, since 2026-09-25), so
+anything this plugin does **by itself** on a new or changed file would happen on both
+machines. `automaticOn` names the one computer that does it; `computerName()` and
+`automaticRunsHere()` are copied word for word into ARCH Images Plus. **Any new automatic
+behaviour (a watcher, an interval, a startup sweep) must check `this.automaticHere()`**;
+anything the user starts by hand must not. The delete popup is the exception that follows
+the user instead: it is offered only for deletions made through `vault.trash` or
+`vault.delete` in this Obsidian (`watchLocalDeletions`), because a synced deletion goes
+through neither. Settings changed on disk are reloaded by `onExternalSettingsChange`, so a
+synced edit is not overwritten by the next save here.
+
 ## Before publishing
 
 The author placeholders are filled in: `manifest.json` and `LICENSE` carry

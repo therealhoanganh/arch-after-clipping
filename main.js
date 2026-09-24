@@ -20,6 +20,39 @@ const os = require('os');
 const { pathToFileURL } = require('url');
 
 /* ------------------------------------------------------------------ *
+ * One computer does the automatic work (1.18.0)
+ * ------------------------------------------------------------------ */
+
+// Since 2026-09-25 the vaults are mirrored between the Mac and an Ubuntu PC by
+// Syncthing. A note written on one machine arrives on the other as a new file,
+// so with Obsidian open on both, both would process it: two downloads, two
+// conversions, conflict files. The setting automaticOn names the one computer
+// that runs the automatic work; the settings file syncs, so both machines read
+// the same answer. Commands and menus run anywhere. Shared with ARCH Images
+// Plus, copied word for word.
+//
+// The name is macOS's Local Hostname there, because the kernel hostname can
+// change with the network; elsewhere os.hostname().
+function computerName() {
+  if (process.platform === 'darwin') {
+    try {
+      const n = require('child_process')
+        .execFileSync('/usr/sbin/scutil', ['--get', 'LocalHostName'], { encoding: 'utf8', timeout: 3000 })
+        .trim();
+      if (n) return n;
+    } catch (_) {}
+  }
+  return os.hostname().replace(/\.local$/, '');
+}
+
+// automaticOn: '' is unclaimed (the first computer to load this version claims
+// it), '*' is every computer, anything else one computer's name.
+function automaticRunsHere(settings, here) {
+  const a = String(settings.automaticOn || '');
+  return !a || a === '*' || a === here;
+}
+
+/* ------------------------------------------------------------------ *
  * Videos outside the vault
  * ------------------------------------------------------------------ */
 
@@ -183,6 +216,10 @@ const DEFAULT_SETTINGS = {
   // queued, and moved to the drive once it is back when this is on.
   moveToDriveWhenBack: true,
   driveMoveQueue: [],
+  // The one computer that runs the automatic work (1.18.0): new-note
+  // processing, the startup catch-up, the move of waiting videos to the drive.
+  // '' unclaimed, '*' every computer, else a computer's name.
+  automaticOn: '',
   quality: 'bestvideo*+bestaudio/best',
   audioFormat: 'mp3',
   cookiesFromBrowser: '',
@@ -359,10 +396,20 @@ module.exports = class ClipArchiver extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
         this.app.vault.on('create', (file) => {
-          if (file instanceof TFile) this.onFileCreated(file);
+          if (!(file instanceof TFile)) return;
+          if (!this.automaticHere()) {
+            if (file.extension === 'md') this.log(`left alone, automatic work runs on ${this.settings.automaticOn}:`, file.path);
+            return;
+          }
+          this.onFileCreated(file);
         })
       );
-      this.log('watching for new notes');
+      this.log(
+        this.automaticHere()
+          ? 'watching for new notes'
+          : `not processing new notes here: automatic work runs on ${this.settings.automaticOn}, this is ${this.computer}`
+      );
+      this.watchLocalDeletions();
       this.checkMediaExtended();
       this.watchDriveLabels();
       this.watchDriveQueue();
@@ -579,11 +626,61 @@ module.exports = class ClipArchiver extends Plugin {
           .map((v) => String(v).trim())
           .filter((v) => /^file:\/\/\/Volumes\//i.test(v) && /\.(mp4|webm|mkv|mov|avi|m4v)(#.*)?$/i.test(v));
         if (!urls.length) return;
+        if (!this.deletedHere(file.path)) {
+          this.log('deleted elsewhere (synced or outside Obsidian), not offering its media:', file.path);
+          return;
+        }
         this.deletedDriveNotes.push({ path: file.path, urls });
         window.clearTimeout(this.deletedDriveTimer);
         this.deletedDriveTimer = window.setTimeout(() => this.offerDriveMediaDelete(), 500);
       })
     );
+  }
+
+  // Which deletions were made in this Obsidian (1.18.0). With the vaults
+  // mirrored, a note deleted on one computer is deleted on the other a few
+  // seconds later, and the popup must show only where he deleted it ("the
+  // popup show on whichever machine I delete on"). Every deletion made inside
+  // Obsidian (file menu, delete key, commands, other plugins) goes through
+  // vault.trash or vault.delete; one arriving by sync or made in Finder goes
+  // through neither, so marking the paths these two are called with tells them
+  // apart. A folder marks everything under it. Marks expire after a minute.
+  watchLocalDeletions() {
+    this.localDeletions = new Map();
+    const vault = this.app.vault;
+    const marks = this.localDeletions;
+    for (const name of ['trash', 'delete']) {
+      const orig = vault[name];
+      if (typeof orig !== 'function') continue;
+      let active = true;
+      const wrapper = function (file, ...rest) {
+        if (active && file && file.path) marks.set(file.path, Date.now());
+        return orig.call(this, file, ...rest);
+      };
+      vault[name] = wrapper;
+      // Another plugin may have wrapped it after this one; then only switch
+      // this wrapper off rather than cut that plugin's out.
+      this.register(() => {
+        active = false;
+        if (vault[name] === wrapper) vault[name] = orig;
+      });
+    }
+  }
+
+  deletedHere(p) {
+    const now = Date.now();
+    for (const [marked, t] of this.localDeletions || []) {
+      if (now - t > 60 * 1000) {
+        this.localDeletions.delete(marked);
+        continue;
+      }
+      if (p === marked || p.startsWith(marked + '/')) return true;
+    }
+    return false;
+  }
+
+  automaticHere() {
+    return automaticRunsHere(this.settings, this.computer);
   }
 
   async offerDriveMediaDelete() {
@@ -701,6 +798,7 @@ module.exports = class ClipArchiver extends Plugin {
       return;
     }
     if (!manual && !this.settings.moveToDriveWhenBack) return;
+    if (!manual && !this.automaticHere()) return;
     const root = String(this.settings.externalVideoFolder || '').trim();
     if (!root || !driveMounted(root)) {
       if (manual) new Notice(`${q.length} video(s) wait for ${root ? path.basename(driveOf(root) || root) : 'the drive'}, which is not plugged in.`);
@@ -1175,6 +1273,7 @@ module.exports = class ClipArchiver extends Plugin {
   // young file without a URL is a note the user just made by hand.
   async catchUpStartupClips() {
     if (!this.settings.enabled) return;
+    if (!this.automaticHere()) return;
     const cutoff = Date.now() - this.settings.graceSeconds * 1000;
     const young = this.app.vault.getMarkdownFiles().filter((f) => (f.stat?.ctime ?? 0) >= cutoff);
     for (const file of young) {
@@ -4146,10 +4245,26 @@ module.exports = class ClipArchiver extends Plugin {
     if (!Array.isArray(this.settings.transformRules)) {
       this.settings.transformRules = DEFAULT_SETTINGS.transformRules.map((r) => ({ ...r }));
     }
+    // An unclaimed vault is claimed by the first computer to load this version,
+    // so a vault never runs its automatic work on two computers by default.
+    if (!this.computer) this.computer = computerName();
+    if (!this.settings.automaticOn) {
+      this.settings.automaticOn = this.computer;
+      await this.saveData(this.settings);
+      this.log('automatic work claimed for this computer:', this.computer);
+    }
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  // The settings file changed on disk under a running Obsidian: with the vaults
+  // mirrored, an edit made on the other computer. Without reloading, the next
+  // save here would write the old settings back over it.
+  async onExternalSettingsChange() {
+    await this.loadSettings();
+    this.log('settings changed on disk (the other computer?), reloaded; automatic work runs on', this.settings.automaticOn);
   }
 };
 
@@ -5110,6 +5225,28 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           await this.save();
         })
       );
+
+    {
+      const here = this.plugin.computer;
+      const cur = s.automaticOn || here;
+      new Setting(containerEl)
+        .setName('Automatic work runs on')
+        .setDesc(
+          'The one computer that processes new notes, catches up clips at startup and moves waiting videos to the drive. ' +
+            'The vaults are mirrored between computers, so a note clipped on one arrives on the other as new; with Obsidian open ' +
+            'on both, both would process it. Commands, menus and the delete popup work on every computer. ' +
+            `This computer is ${here}.`
+        )
+        .addDropdown((d) => {
+          d.addOption(here, `${here} (this computer)`);
+          if (cur !== here && cur !== '*') d.addOption(cur, cur);
+          d.addOption('*', 'Every computer');
+          d.setValue(cur).onChange(async (v) => {
+            s.automaticOn = v;
+            await this.save();
+          });
+        });
+    }
 
     new Setting(containerEl)
       .setName('Relink script')

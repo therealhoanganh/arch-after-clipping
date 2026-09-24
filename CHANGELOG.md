@@ -6,7 +6,40 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.17.0 — current
+## 1.18.0 — current
+
+Since 2026-09-25 the vaults are mirrored between the Mac and an Ubuntu PC by Syncthing
+(`~/Documents/backup-strategy/Backup Strategy.md`, Part 2). Two things in this plugin
+assumed one computer.
+
+- **The automatic work runs on one computer, named in the new setting *Automatic work
+  runs on*.** A note clipped on one machine arrives on the other as a new file, so with
+  Obsidian open on both, both processed it: two downloads, and conflict files. The
+  setting holds a computer's name (macOS's Local Hostname, `Hoangs-MacBook-Pro`; the
+  PC's hostname, `hoanganh-ubuntu`) or *Every computer*. It lives in the synced settings
+  file, so both machines read the same answer. Gated: new-note processing, the startup
+  catch-up, and the move of waiting videos to the drive. Commands and menus run
+  anywhere. A vault without the setting is claimed by the first computer to load this
+  version, so no vault runs on two by default. A note clipped on the PC is processed by
+  the Mac when it arrives there, if Obsidian is open on the Mac.
+- **The delete popup shows only on the computer where the note was deleted.** He chose
+  it: *"I want to have 'the popup show on whichever machine I delete on', it's move
+  convinient,"* and asked for it never to show on the other machine too. Every deletion
+  made inside Obsidian goes through `vault.trash` or `vault.delete`; one arriving by sync
+  goes through neither. The plugin wraps both and marks the paths, and the popup offers
+  only marked ones (a folder marks everything under it; marks expire after a minute). A
+  note deleted in Finder no longer gets the popup either, for the same reason.
+- **Settings changed on disk are reloaded** (`onExternalSettingsChange`). Without it, a
+  settings edit synced from the other machine was overwritten by this machine's next save.
+
+Tested in TESTFIELD: the claim on first load; with the PC named, a new clip note left
+alone (logged) and processed once the Mac was named; a note removed from disk (as a sync
+does) gets no popup while the same note deleted through Obsidian does; Obsidian calls the
+reload when it sees the settings file change. In TESTFIELD itself the plugin folder is a
+symlink, so Obsidian's watcher does not see its `data.json` change; a BRAT install is a
+real folder and does.
+
+## 1.17.0
 
 - **Deleting a note whose video is on the drive asks about its media.** Obsidian's own
   *Delete unlinked attachments* offers only vault files the note links. A drive video

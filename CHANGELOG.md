@@ -6,7 +6,19 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.18.0 — current
+## 1.18.1 — current
+
+- **Media Extended library notes go in `_/media-lib`, not `media-lib` at the vault's
+  root.** One note is written per video saved on the drive (1.17.0), so Psycho-history
+  had 204 of them and TECHNOS 89 in a folder at the top of the vault. His words,
+  2026-09-25: *"why there is media-lib folder and lots of Media Extended id files in it?
+  It's cluttering the vault."* `media-lib` was Media Extended's own default folder name,
+  copied. The `_` folder is where each vault keeps tooling files, and Media Extended
+  finds a library note by its `mx-uid` wherever it is, as this plugin already did when
+  looking for an existing one; the notes already written were moved there the same day.
+  YT Playlists 1.8.1 and `backup-strategy/link-subtitles.py` changed with it.
+
+## 1.18.0
 
 Since 2026-09-25 the vaults are mirrored between the Mac and an Ubuntu PC by Syncthing
 (`~/Documents/backup-strategy/Backup Strategy.md`, Part 2). Two things in this plugin

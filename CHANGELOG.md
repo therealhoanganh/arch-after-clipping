@@ -6,7 +6,37 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.18.5 — current
+## 1.18.6 — current
+
+Fixes YouTube thumbnails left as web addresses. He asked on 2026-09-27: *"My Arch After
+Clipping doesn't auto download image anymore, can you check?"* Fifteen YouTube clips from
+2026-09-24 and 2026-09-25 (ten in Psycho-history, four in CHAOS, one in TESTFIELD's trash)
+had been processed (video recorded, `duration` filled) with `banner` still pointing at
+`i.ytimg.com`, and nothing in the log said why. Clips made on 2026-09-27 were fine. Three
+causes, each measured in the running app:
+
+- **The image properties were read from the metadata cache only.** Obsidian has nothing
+  for a note in the first moments after it is created (tested: nothing at creation, all of
+  it 300 ms later), and while it is busy indexing (a clip that launched a closed vault,
+  Syncthing bringing many files) that gap lasts seconds. 1.18.5 called on a note that
+  instant left the thumbnail remote without a word; 1.18.6 saves it. `doImages` now
+  parses the note's own text first and uses the cache only if that will not parse, as
+  every other check in the plugin already did.
+- **Obsidian refuses any request carrying a youtube.com `Referer`** (`net::ERR_BLOCKED_BY_CLIENT`;
+  the same request without it returns 200 in a few milliseconds). The image fetch sends the
+  clip's page as the Referer, so every YouTube thumbnail depended on the single Node attempt at
+  the end of the ladder. A blocked request is now sent again without `Referer` and `Origin`,
+  and Node gets a second attempt. A timeout moves on to the next attempt; before, it
+  ended the fetch at once.
+- **A failed automatic download said nothing.** It now shows a notice naming the note, the
+  reason (`HTTP 404`, `timed out`…) and the command that retries it, *Download Images for
+  This Note*. An address that simply is not an image stays a quiet log line, as before.
+
+The fifteen notes were repaired the same day through each vault's own *Download Images for
+This Note* step. TESTFIELD's trashed copy and CHAOS's duplicate *The Hot Zone - Starts 3 July*
+(its twin from 2026-09-20 has its image) were left alone.
+
+## 1.18.5
 
 - The setup popup's box heading reads *Filled In for You*: the Title Case pass read only labels set through Obsidian's own calls, and this one is plain text (found in the check before a compact, 2026-09-27; "in" is capitalized as the particle of *fill in*).
 - `testCookies`, which 1.18.4's login check replaced, is removed; nothing called it.

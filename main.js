@@ -10,6 +10,7 @@ const {
   TFolder,
   Modal,
   normalizePath,
+  parseYaml,
   requestUrl,
 } = require('obsidian');
 
@@ -1850,8 +1851,24 @@ module.exports = class ClipArchiver extends Plugin {
     const content = await this.app.vault.read(file);
     const { fm, body } = splitFrontmatter(content);
 
-    const cachedFm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const referer = sourceUrl || this.resolveSourceUrl(cachedFm);
+    // The note's own text first, the metadata cache only when that will not
+    // parse. A note clipped a moment ago is often not in the cache yet: when
+    // Obsidian is busy indexing (a clip that launched a closed vault, a sync
+    // bringing many files at once) it can take seconds. Reading only the cache
+    // found no image properties then, and the thumbnail stayed a web address
+    // with nothing in the log (2026-09-25, fifteen YouTube clips).
+    const cachedFm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null;
+    let fmValues = null;
+    if (fm) {
+      try {
+        fmValues = parseYaml(fm.replace(/^---\r?\n/, '').replace(/\r?\n---[ \t]*\r?\n?$/, ''));
+      } catch (e) {
+        this.log('frontmatter would not parse, using the metadata cache:', file.path, e.message);
+      }
+    }
+    if (!fmValues || typeof fmValues !== 'object') fmValues = cachedFm ?? {};
+    if (fm && !cachedFm) this.log('metadata cache not ready, image properties read from the note text:', file.path);
+    const referer = sourceUrl || this.resolveSourceUrl(fmValues);
 
     // Collect candidate URLs from the body. A markdown image pointing at a video
     // page is a thumbnail placeholder, not a picture, so don't waste a request.
@@ -1866,7 +1883,7 @@ module.exports = class ClipArchiver extends Plugin {
     const fmTargets = [];
     if (this.settings.rewriteFrontmatterImages) {
       for (const key of this.settings.frontmatterImageKeys) {
-        const raw = cachedFm[key];
+        const raw = fmValues[key];
         if (typeof raw !== 'string') continue;
         const u = this.extractUrl(raw);
         if (!u || u === referer) continue;
@@ -1881,6 +1898,7 @@ module.exports = class ClipArchiver extends Plugin {
     }
 
     if (urls.size === 0) {
+      this.log('no external images in', file.path);
       if (notify) new Notice('No external images found in this note.');
       return;
     }
@@ -1946,8 +1964,22 @@ module.exports = class ClipArchiver extends Plugin {
       }
     }
 
+    // Said even when the run was automatic: a thumbnail left as a web address
+    // looks like a finished clip, so without this nobody knows to run it again.
     if (urlToFile.size === 0) {
-      if (notify) new Notice('No images could be downloaded. See the developer console.');
+      const real = results.filter((r) => !r.buffer && !/not an image|no content type/.test(r.reason || ''));
+      if (!real.length) {
+        this.log('no image saved, none of the addresses served an image:', file.path);
+        if (notify) new Notice('No images could be downloaded. See the developer console.');
+        return;
+      }
+      const why = real[0].reason || 'unknown';
+      this.log(`no image saved for ${file.path}: ${why}`);
+      new Notice(
+        `After Clipping could not save the ${plural(real.length, 'image')} in "${file.basename}" (${why}), ` +
+          'so they are still web addresses. Run "Download Images for This Note" to try again.',
+        notify ? 8000 : 15000
+      );
       return;
     }
 
@@ -2199,25 +2231,40 @@ module.exports = class ClipArchiver extends Plugin {
       }
     }
 
-    // attempt 0 and 1 use Obsidian's fetcher; attempt 2 goes around any blocker.
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Obsidian refuses any request that carries a youtube.com Referer
+    // (net::ERR_BLOCKED_BY_CLIENT, measured 2026-09-27), and the Referer is the
+    // clip's own page, so every YouTube thumbnail used to hang on one Node
+    // attempt at the end. A blocked request is now sent again without Referer
+    // and Origin, which image hosts like i.ytimg.com do not need. Attempts:
+    // Obsidian's fetcher, again (bare if the first was blocked), Node, Node
+    // once more. A timeout moves on to the next attempt instead of ending here.
+    const bare = { ...headers };
+    delete bare.Referer;
+    delete bare.Origin;
+    let useHeaders = headers;
+    let last = 'unknown';
+    const ATTEMPTS = 4;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      const viaNode = attempt >= 2;
+      const more = attempt < ATTEMPTS - 1;
       try {
-        const viaNode = attempt === 2;
         const res = viaNode
           ? await this.fetchViaNode(url, headers)
           : await Promise.race([
-              requestUrl({ url, method: 'GET', headers, throw: false }),
+              requestUrl({ url, method: 'GET', headers: useHeaders, throw: false }),
               sleep(HTTP_TIMEOUT_MS).then(() => ({ status: 0, __timeout: true })),
             ]);
-        if (res.__timeout) return { buffer: null, ext: '.jpg', reason: 'timed out' };
-        if (viaNode) this.log('fetched around the blocker via Node:', url);
-        if (res.status < 200 || res.status >= 300) {
-          if (attempt < 2) {
-            await sleep(600);
-            continue;
-          }
-          return { buffer: null, ext: '.jpg', reason: `HTTP ${res.status}` };
+        if (res.__timeout) {
+          last = 'timed out';
+          continue;
         }
+        if (res.status < 200 || res.status >= 300) {
+          last = `HTTP ${res.status}`;
+          if (more) await sleep(600);
+          continue;
+        }
+        if (viaNode) this.log('fetched around the blocker via Node:', url);
+        else if (useHeaders === bare) this.log('fetched without the Referer, which Obsidian blocked:', url);
         const ct = String(
           (res.headers && (res.headers['content-type'] || res.headers['Content-Type'])) || ''
         ).toLowerCase();
@@ -2233,21 +2280,15 @@ module.exports = class ClipArchiver extends Plugin {
         }
         return { buffer: buf, ext: extFromResponse(url, ct) };
       } catch (e) {
-        const msg = String((e && e.message) || e);
-        // A blocked request will never succeed through the same stack, so skip
-        // straight to the Node fallback instead of burning a retry.
-        if (/BLOCKED_BY_CLIENT|ERR_FAILED|ERR_NETWORK/i.test(msg) && attempt < 2) {
-          attempt = 1;
+        last = String((e && e.message) || e);
+        if (!viaNode && /BLOCKED_BY_CLIENT/i.test(last) && useHeaders !== bare) {
+          useHeaders = bare;
           continue;
         }
-        if (attempt < 2) {
-          await sleep(600);
-          continue;
-        }
-        return { buffer: null, ext: '.jpg', reason: msg };
+        if (more) await sleep(600);
       }
     }
-    return { buffer: null, ext: '.jpg', reason: 'unknown' };
+    return { buffer: null, ext: '.jpg', reason: last };
   }
 
   /* ---------------- transform ---------------- */

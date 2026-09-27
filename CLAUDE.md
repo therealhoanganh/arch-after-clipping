@@ -39,6 +39,17 @@ nothing there. The defaults now use `/(?:twitter|x)\.com\/[^\/]+\/status\//` and
 `metadata done` followed by `no downloadable media`: that pairing means the
 pattern is too broad.
 
+**Obsidian refuses a request whose `Referer` is youtube.com** (`net::ERR_BLOCKED_BY_CLIENT`),
+and `fetchImage` sends the clip's page as the Referer, so a YouTube thumbnail is fetched
+on the second try, without `Referer` and `Origin` (1.18.6). A log line "fetched without
+the Referer" is that path working. Before 1.18.6 only a single Node attempt at the end
+stood between a YouTube clip and a thumbnail left as a web address.
+
+**Read the note's own text, not only the metadata cache, for anything a new clip needs.**
+The cache has nothing for a note in its first moments, and seconds more while Obsidian
+indexes; `doImages` read image properties from the cache alone and silently saved nothing
+for fifteen clips on 2026-09-24/25 (1.18.6).
+
 **The lap times in the console are cumulative.** A stage's cost is the difference
 between two lines. Both the author and a previous session misread this and blamed
 the image download for time spent in the rename ahead of it.

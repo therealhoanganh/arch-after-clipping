@@ -6,7 +6,20 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.18.2 — current
+## 1.18.3 — current
+
+- **The transformer rule rows are readable again.** 1.18.2 gave each row a description
+  beside its three boxes, which squeezed the row's name column to a sliver: the rows read
+  "R.. 1 / N.. U.. p.. s…". Found the same day in a screenshot, looking at the settings'
+  layout. A row is now its three boxes alone, stretched across the card, each named by a
+  tooltip, and the rules' explanation shares one card with *Add Rule* (it was a loose
+  paragraph above the rows, and *Add Rule* a card of its own below them).
+- ***Media Sites* is edited in a popup behind *Manage…***, one site per line; the card shows
+  how many there are. It was a narrow three-line box that wrapped the regular expressions
+  mid-word. The setting is still stored comma-separated, and saving without a change
+  leaves it byte for byte as it was. After the Title Case releases he asked: *"Did you work on UI of the plugins like button structures or something? Like in Arch YT Playlist, the toggle list to paste youtube channel links in is quite ugly."* The review had used a checklist (wording, keyboard, focus) that never judged layout. Shown three layouts, he chose a *Manage…* button opening a popup, the way Obsidian's own *Excluded files* setting works, and chose it for every list of that kind. The popup (`ListModal`, the same class in YT Playlists, X Twitter, After Clipping and Browser History) has a large box, a live count as you type, and *Cancel* and *Save*; only *Cancel* throws an edit away, since a long paste lost to Escape is worse than a save not asked for. Tried in TESTFIELD: the count, Cancel leaving the list alone, and Escape keeping an edit.
+
+## 1.18.2
 
 - **Title Case in every label**, from the web-design-guidelines review of 2026-09-27 (`~/Documents/ARCH UI Review.md`), whose whole list he approved: *"Yes, proceed on."* Commands, setting names and headings, buttons, popup titles and dropdown choices, Chicago style (small words such as *for*, *the*, *before* stay lower case), as in ARCH Images Plus 0.7.6. His preference: *"Actually, I much prefer Title Case."* Descriptions and notices stay sentences, and the ones that name a command or setting use its new name. A hotkey set on a command survives, because Obsidian stores hotkeys by the command's id.
 - **"Clip Archiver", the plugin's old name, is gone from what is shown**: the *Inspect This

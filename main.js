@@ -4498,6 +4498,55 @@ class DriveMediaDeleteModal extends Modal {
   }
 }
 
+// The popup behind a long list's Manage… button, the same class in ARCH YT
+// Playlists, X Twitter, After Clipping and Browser History (change all together). He chose it on 2026-09-27
+// for every long list, the way Obsidian's own Excluded Files setting works: the
+// settings tab shows one card with the count, and the list is edited here, in a
+// box big enough to paste into. Only Cancel throws an edit away; Escape or the ✕
+// keep it, since a long paste lost to one key is worse than a save not asked for.
+class ListModal extends Modal {
+  constructor(app, { title, hint, value, placeholder, count, onSave }) {
+    super(app);
+    Object.assign(this, { title, hint, value, placeholder, count, onSave });
+    this.done = false;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    this.titleEl.setText(this.title);
+    this.modalEl.style.width = 'min(720px, 92vw)';
+    if (this.hint) contentEl.createEl('p', { text: this.hint, cls: 'setting-item-description', attr: { style: 'margin-top:0;' } });
+    const ta = contentEl.createEl('textarea', {
+      attr: {
+        spellcheck: 'false',
+        'aria-label': this.title,
+        placeholder: this.placeholder || '',
+        style: 'width:100%; height:45vh; resize:vertical; font-family:var(--font-monospace); font-size:var(--font-ui-small); line-height:1.6;',
+      },
+    });
+    ta.value = this.value;
+    this.ta = ta;
+    const foot = contentEl.createDiv({ attr: { style: 'display:flex; align-items:center; gap:8px; margin-top:12px;' } });
+    const status = foot.createSpan({ cls: 'setting-item-description', attr: { style: 'flex:1; font-variant-numeric:tabular-nums;', 'aria-live': 'polite' } });
+    const update = () => status.setText(this.count(ta.value));
+    update();
+    ta.addEventListener('input', update);
+    const cancel = foot.createEl('button', { text: 'Cancel' });
+    cancel.onclick = () => { this.done = true; this.close(); };
+    const save = foot.createEl('button', { text: 'Save', cls: 'mod-cta' });
+    save.onclick = async () => { this.done = true; this.close(); await this.onSave(ta.value); };
+    // After Obsidian's own focus on the first button: the cursor goes to the end of the list.
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+  }
+
+  onClose() {
+    if (!this.done && this.ta && this.ta.value !== this.value) {
+      this.onSave(this.ta.value).then(() => new Notice(`${this.title}: saved.`));
+    }
+    this.contentEl.empty();
+  }
+}
+
 // Asks before a command that overwrites files or rewrites notes (1.18.2).
 class ConfirmModal extends Modal {
   constructor(app, title, text, action, onYes) {
@@ -5093,16 +5142,27 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     const rulesBox = containerEl.createDiv();
     const renderRules = () => {
       rulesBox.empty();
-      rulesBox.createEl('p', {
-        text:
-          'Rules run top to bottom; the first URL match wins. A pattern is plain text matched anywhere ' +
-          'in the address, or a regular expression wrapped in slashes. Scripts live in the plugin\u2019s ' +
-          'transformers folder.',
-        attr: { style: 'font-size:var(--font-ui-smaller); opacity:.75;' },
-      });
+      // The explanation and Add Rule share one card, and a rule row is its three
+      // boxes alone: 1.18.2 gave each row a description beside the boxes, which
+      // squeezed its name column to "R.. 1" (1.18.3).
+      new Setting(rulesBox)
+        .setName('Site Scripts')
+        .setDesc(
+          'Rules run top to bottom; the first URL match wins. Each is a name, a pattern (plain text matched anywhere ' +
+            'in the address, or a regular expression wrapped in slashes) and a script in the plugin\u2019s ' +
+            'transformers folder.'
+        )
+        .addButton((b) =>
+          b.setButtonText('Add Rule').onClick(async () => {
+            s.transformRules.push({ name: 'New site', pattern: '', script: '' });
+            await this.save();
+            renderRules();
+          })
+        );
 
       s.transformRules.forEach((rule, i) => {
-        const row = new Setting(rulesBox).setName(`Rule ${i + 1}`).setDesc('Name, URL pattern, script');
+        const row = new Setting(rulesBox);
+        row.infoEl.style.display = 'none';
         row.addText((t) =>
           t
             .setPlaceholder('Name')
@@ -5132,9 +5192,11 @@ class ClipArchiverSettingTab extends PluginSettingTab {
         );
         // The grey hints go once a box is filled, so each box keeps its name as a tooltip.
         const labels = ['Rule name', 'URL pattern', 'Script in the transformers folder'];
+        row.controlEl.style.flex = '1';
         row.controlEl.querySelectorAll('input').forEach((el, k) => {
           el.title = labels[k];
           el.setAttribute('aria-label', labels[k]);
+          el.style.flex = '1';
         });
         row.addExtraButton((b) =>
           b
@@ -5148,13 +5210,6 @@ class ClipArchiverSettingTab extends PluginSettingTab {
         );
       });
 
-      new Setting(rulesBox).addButton((b) =>
-        b.setButtonText('Add Rule').onClick(async () => {
-          s.transformRules.push({ name: 'New site', pattern: '', script: '' });
-          await this.save();
-          renderRules();
-        })
-      );
     };
     renderRules();
 
@@ -5358,15 +5413,27 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Media Sites')
-      .setDesc('Comma-separated. Only these addresses are handed to yt-dlp, so ordinary articles cost nothing.')
-      .addTextArea((t) => {
-        t.inputEl.rows = 3;
-        t.inputEl.style.width = '100%';
-        t.setValue(s.videoHosts).onChange(async (v) => {
-          s.videoHosts = v;
-          await this.save();
-        });
-      });
+      .setDesc(
+        `${plural(splitList(s.videoHosts).length, 'site')}. Only these addresses are handed to yt-dlp, so ordinary ` +
+          'articles cost nothing. A site is a host (youtube.com) or a regular expression wrapped in slashes.'
+      )
+      // Edited one per line in a popup (1.18.3): a narrow three-line box wrapped the
+      // patterns mid-word. Stored comma-separated as before.
+      .addButton((b) =>
+        b.setButtonText('Manage\u2026').onClick(() =>
+          new ListModal(this.app, {
+            title: 'Media Sites',
+            hint: 'One per line: a host (youtube.com) or a regular expression wrapped in slashes.',
+            value: splitList(s.videoHosts).join('\n'),
+            count: (text) => plural(text.split('\n').filter((l) => l.trim()).length, 'site'),
+            onSave: async (v) => {
+              s.videoHosts = v.split('\n').map((l) => l.trim()).filter(Boolean).join(', ');
+              await this.save();
+              this.display();
+            },
+          }).open()
+        )
+      );
 
     new Setting(containerEl)
       .setName('Try Every Address')

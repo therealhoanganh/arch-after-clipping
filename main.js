@@ -3623,6 +3623,36 @@ module.exports = class ClipArchiver extends Plugin {
     return found.sort((a, b) => b.mtime - a.mtime);
   }
 
+  // Whether the browser is logged in to YouTube, as yt-dlp reads it (1.18.4).
+  // yt-dlp writes every cookie it loaded to the --cookies file when it exits,
+  // whatever happened to the address, and it refuses "ytsearch0:" at once, so
+  // nothing is fetched. The file holds all of the browser's cookies in plain
+  // text, so it goes in a private temporary folder that is deleted straight away.
+  // The same method is in ARCH YT Playlists.
+  async testYouTubeLogin(browser) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-cookies-'));
+    const file = path.join(dir, 'cookies.txt');
+    try {
+      const r = await this.runProcess(this.settings.ytDlpPath || 'yt-dlp', ['--cookies-from-browser', browser, '--cookies', file, '--quiet', '--no-warnings', 'ytsearch0:cookie-test'], { timeoutMs: 60000 });
+      if (!fs.existsSync(file)) {
+        const err = (r.stderr || '').split('\n').map((l) => l.trim()).filter((l) => /ERROR/.test(l)).pop() || 'yt-dlp read no cookies';
+        return { ok: false, error: err.replace(/^ERROR:\s*/, '') };
+      }
+      const names = new Set();
+      for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        const f = line.split('\t');
+        if (f.length < 7) continue;
+        const domain = f[0].replace(/^#HttpOnly_/, '');
+        if (/(^|\.)youtube\.com$/.test(domain)) names.add(f[5]);
+      }
+      return { ok: true, count: names.size, loggedIn: names.has('LOGIN_INFO') || names.has('SAPISID') };
+    } catch (e) {
+      return { ok: false, error: String(e.message) };
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
   async testCookies(browser) {
     // yt-dlp's own long-standing test video, used only to confirm cookie extraction.
     const args = [
@@ -3674,6 +3704,10 @@ module.exports = class ClipArchiver extends Plugin {
     report.python = py
       ? { found: true, path: py, version: (await this.runProcess(py, ['--version'], { timeoutMs: 8000 })).stdout.trim() || 'python 3' }
       : { found: false, path: null, version: null };
+
+    // Whether the browser picked is logged in to YouTube (1.18.4).
+    report.youtubeLogin = this.settings.cookiesFromBrowser && !this.settings.cookiesFile && report.ytdlp.found
+      ? await this.testYouTubeLogin(this.settings.cookiesFromBrowser) : null;
 
     // yt-dlp now needs an external JavaScript runtime to solve YouTube's challenges.
     report.jsRuntime = { found: false, path: null, version: null };
@@ -4319,6 +4353,49 @@ function renderPlaceChoice(el, info, onPick) {
 // "1 video", "3 videos": a count and its word, never "video(s)".
 function plural(n, word) { return `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`; }
 
+// The Cookies row of the setup popup says three things in so many words: what
+// is wrong, what fails because of it, and how to fix it and see that it worked
+// (1.18.4 / 1.8.4). His words, 2026-09-27: "You need to explicitly tell this in
+// the setup, so future me can know what's went wrong."
+function cookieAdvice(browser, test, fails, site) {
+  if (!browser) {
+    return { state: 'warn', lines: [
+      'No browser picked, so yt-dlp runs logged out.',
+      `Without a login: ${fails}`,
+      `To fix: pick the browser you use ${site} in, then press Test.`,
+    ] };
+  }
+  if (!test) return { state: 'warn', lines: [`Read from ${browser} at each run. Not tested yet: press Test.`] };
+  if (test.ok && test.loggedIn) {
+    return { state: 'ok', lines: [`Logged in to ${site} in ${browser}. yt-dlp reads the login from ${browser} at each run; nothing is stored.`] };
+  }
+  if (test.ok) {
+    return { state: 'warn', lines: [
+      `${browser} is not logged in to ${site}.`,
+      `Without a login: ${fails}`,
+      `To fix: open ${site.toLowerCase()}.com in ${browser} and log in, then press Test here. It turns green once the login can be read.`,
+    ] };
+  }
+  const keyring = /Item does not exist|ItemNotFound|keyring/i.test(test.error);
+  const secret = /secretstorage/i.test(test.error);
+  const locked = /could not copy|database is locked|Permission denied/i.test(test.error);
+  return { state: 'missing', lines: [
+    `${browser}’s cookies could not be read: ${test.error}`,
+    `Without them: ${fails}`,
+    'To fix: ' + (keyring
+      ? 'the desktop’s keyring has an entry it cannot open. Restart the computer (restarting the apps is not enough), then press Test.'
+      : secret
+        ? 'yt-dlp lacks the secretstorage package it needs on Linux to read the keyring. Reinstall it with the package (uv tool install --force "yt-dlp[default]" --with secretstorage), then press Test.'
+        : locked
+          ? `close ${browser}, which is holding its cookie file, then press Test.`
+          : 'check that the browser picked is the one you use, then press Test.'),
+  ] };
+}
+
+function explainLines(lines) {
+  return createFragment((f) => lines.forEach((l, i) => f.createDiv({ text: l, attr: i ? { style: 'margin-top:4px;' } : {} })));
+}
+
 class DownloadModeModal extends Modal {
   constructor(app, noteName, url, onChoice, placeInfo) {
     super(app);
@@ -4779,24 +4856,21 @@ class SetupModal extends Modal {
       null
     );
 
-    // Cookies, with a picker over whatever browsers are actually installed.
-    let cookieState = 'warn';
-    let cookieDetail = 'None configured. YouTube will refuse some downloads without them.';
+    // Cookies: which browser, and whether yt-dlp can read a YouTube login from it.
+    const AC_FAILS = 'age-restricted and members-only videos fail, and YouTube may refuse a download with "Sign in to confirm you’re not a bot".';
+    let advice;
     if (s.cookiesFile) {
       if (fs.existsSync(s.cookiesFile)) {
         const days = Math.floor((Date.now() - fs.statSync(s.cookiesFile).mtimeMs) / 86400000);
-        cookieState = days > 21 ? 'warn' : 'ok';
-        cookieDetail = `File exported ${days} days ago.${days > 21 ? ' Exported cookies go stale; re-export or switch to reading them from the browser.' : ''}`;
+        advice = { state: days > 21 ? 'warn' : 'ok', lines: [`Read from a file exported ${days} days ago.`].concat(days > 21 ? [`Exported cookies go stale. Without a fresh login: ${AC_FAILS}`, 'To fix: export them again, or empty Cookies File and pick a browser here.'] : []) };
       } else {
-        cookieState = 'missing';
-        cookieDetail = `No file at ${s.cookiesFile}`;
+        advice = { state: 'missing', lines: [`No file at ${s.cookiesFile}.`, `Without cookies: ${AC_FAILS}`, 'To fix: export the file again, or empty Cookies File in settings and pick a browser here.'] };
       }
-    } else if (s.cookiesFromBrowser) {
-      cookieState = 'ok';
-      cookieDetail = `Read from ${s.cookiesFromBrowser} on each run.`;
+    } else {
+      advice = cookieAdvice(s.cookiesFromBrowser, r.youtubeLogin, AC_FAILS, 'YouTube');
     }
-
-    const cookieRow = this.row('Cookies', cookieState, cookieDetail, null);
+    const cookieRow = this.row('Cookies', advice.state, '', null);
+    cookieRow.setDesc(explainLines(advice.lines));
     if ((r.browsers || []).length && !s.cookiesFile) {
       cookieRow.addDropdown((d) => {
         d.addOption('', 'None');
@@ -4805,21 +4879,16 @@ class SetupModal extends Modal {
         d.onChange(async (v) => {
           s.cookiesFromBrowser = v;
           await this.plugin.saveSettings();
+          r.youtubeLogin = v ? await this.plugin.testYouTubeLogin(v) : null;
           this.render();
         });
       });
       if (s.cookiesFromBrowser) {
         cookieRow.addButton((b) =>
           b.setButtonText('Test').onClick(async () => {
-            const n = new Notice(`Testing ${s.cookiesFromBrowser} cookies…`, 0);
-            const res = await this.plugin.testCookies(s.cookiesFromBrowser);
-            n.hide();
-            new Notice(
-              res.ok
-                ? `${s.cookiesFromBrowser} cookies work.`
-                : `${s.cookiesFromBrowser} cookies failed: ${res.detail || 'see console'}`,
-              10000
-            );
+            b.setDisabled(true).setButtonText('Testing…');
+            r.youtubeLogin = await this.plugin.testYouTubeLogin(s.cookiesFromBrowser);
+            this.render();
           })
         );
       }
@@ -4836,7 +4905,7 @@ class SetupModal extends Modal {
     this.row(
       'Transformer Scripts',
       scripts.length ? 'ok' : 'missing',
-      scripts.length ? scripts.join(', ') : `No .py files in ${dir}`,
+      scripts.length ? scripts.join(', ') : `No .py files in ${dir}, so no site script runs on a clip. To fix: run the command Restore the Bundled Transformer Scripts.`,
       null
     );
 

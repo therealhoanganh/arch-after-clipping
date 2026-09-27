@@ -6,7 +6,21 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.18.3 — current
+## 1.18.4 — current
+
+- **The setup's Cookies row checks for a YouTube login and says what it means.** His words, 2026-09-27, after the PC's missing X login was explained only in the chat: *"You need to explicitly tell this in the setup, so future me can know what's went wrong. And apply this explicit telling in other plugin too."* It
+  showed "Read from chrome on each run" whenever a browser was picked, and *Test* only
+  proved yt-dlp could read the cookies. Now `testYouTubeLogin` has yt-dlp write out the
+  cookies it loaded (`--cookies` to a private temporary folder, deleted at once, and an
+  address it refuses straight away, so nothing is fetched) and looks for YouTube's login
+  cookie. The row says, line by line, what is wrong, what fails because of it
+  (age-restricted and members-only videos, "Sign in to confirm you're not a bot"), and how
+  to fix it and see that it worked. A keyring that cannot be read, a missing
+  `secretstorage` and a browser holding its cookie file each get their own fix.
+- The *Transformer Scripts* row, when empty, says no site script will run and names the
+  command that restores them.
+
+## 1.18.3
 
 - **The transformer rule rows are readable again.** 1.18.2 gave each row a description
   beside its three boxes, which squeezed the row's name column to a sliver: the rows read

@@ -48,7 +48,7 @@ stood between a YouTube clip and a thumbnail left as a web address.
 **Read the note's own text, not only the metadata cache, for anything a new clip needs.**
 The cache has nothing for a note in its first moments, and seconds more while Obsidian
 indexes; `doImages` read image properties from the cache alone and silently saved nothing
-for fifteen clips on 2026-09-24/25 (1.18.6).
+for fourteen clips on 2026-09-24/25 (1.18.6).
 
 **The lap times in the console are cumulative.** A stage's cost is the difference
 between two lines. Both the author and a previous session misread this and blamed

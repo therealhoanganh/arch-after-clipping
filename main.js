@@ -1856,7 +1856,7 @@ module.exports = class ClipArchiver extends Plugin {
     // Obsidian is busy indexing (a clip that launched a closed vault, a sync
     // bringing many files at once) it can take seconds. Reading only the cache
     // found no image properties then, and the thumbnail stayed a web address
-    // with nothing in the log (2026-09-25, fifteen YouTube clips).
+    // with nothing in the log (2026-09-24/25, fourteen YouTube clips).
     const cachedFm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? null;
     let fmValues = null;
     if (fm) {

@@ -9,9 +9,9 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 ## 1.18.6 — current
 
 Fixes YouTube thumbnails left as web addresses. He asked on 2026-09-27: *"My Arch After
-Clipping doesn't auto download image anymore, can you check?"* Fifteen YouTube clips from
-2026-09-24 and 2026-09-25 (ten in Psycho-history, four in CHAOS, one in TESTFIELD's trash)
-had been processed (video recorded, `duration` filled) with `banner` still pointing at
+Clipping doesn't auto download image anymore, can you check?"* Fourteen YouTube clips from
+2026-09-24 and 2026-09-25 (ten in Psycho-history, four in CHAOS, and three more in
+TESTFIELD's trash) had been processed (video recorded, `duration` filled) with `banner` still pointing at
 `i.ytimg.com`, and nothing in the log said why. Clips made on 2026-09-27 were fine. Three
 causes, each measured in the running app:
 
@@ -32,8 +32,8 @@ causes, each measured in the running app:
   reason (`HTTP 404`, `timed out`…) and the command that retries it, *Download Images for
   This Note*. An address that simply is not an image stays a quiet log line, as before.
 
-The fifteen notes were repaired the same day through each vault's own *Download Images for
-This Note* step. TESTFIELD's trashed copy and CHAOS's duplicate *The Hot Zone - Starts 3 July*
+The fourteen notes were repaired the same day through each vault's own *Download Images for
+This Note* step. TESTFIELD's trashed ones and CHAOS's duplicate *The Hot Zone - Starts 3 July*
 (its twin from 2026-09-20 has its image) were left alone.
 
 ## 1.18.5

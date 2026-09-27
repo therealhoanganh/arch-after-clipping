@@ -3653,26 +3653,6 @@ module.exports = class ClipArchiver extends Plugin {
     }
   }
 
-  async testCookies(browser) {
-    // yt-dlp's own long-standing test video, used only to confirm cookie extraction.
-    const args = [
-      '--cookies-from-browser',
-      browser,
-      '--simulate',
-      '--quiet',
-      '--no-warnings',
-      'https://www.youtube.com/watch?v=BaW_jenozKc',
-    ];
-    try {
-      const r = await this.runProcess(this.settings.ytDlpPath || 'yt-dlp', args, {
-        timeoutMs: 60000,
-      });
-      return { ok: r.code === 0, detail: (r.stderr || '').trim().split('\n')[0] };
-    } catch (e) {
-      return { ok: false, detail: String(e.message) };
-    }
-  }
-
   async detectTools() {
     const report = {};
 
@@ -4765,7 +4745,7 @@ class SetupModal extends Modal {
         },
       });
       box.createEl('div', {
-        text: 'Filled in for you',
+        text: 'Filled In for You',
         attr: { style: 'font-weight:600; margin-bottom:4px;' },
       });
       for (const line of this.filled) {

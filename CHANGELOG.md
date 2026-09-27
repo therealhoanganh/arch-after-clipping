@@ -6,7 +6,31 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.18.1 — current
+## 1.18.2 — current
+
+- **Title Case in every label**, from the web-design-guidelines review of 2026-09-27 (`~/Documents/ARCH UI Review.md`), whose whole list he approved: *"Yes, proceed on."* Commands, setting names and headings, buttons, popup titles and dropdown choices, Chicago style (small words such as *for*, *the*, *before* stay lower case), as in ARCH Images Plus 0.7.6. His preference: *"Actually, I much prefer Title Case."* Descriptions and notices stay sentences, and the ones that name a command or setting use its new name. A hotkey set on a command survives, because Obsidian stores hotkeys by the command's id.
+- **"Clip Archiver", the plugin's old name, is gone from what is shown**: the *Inspect This
+  Note* command and its popup, and five notices, one of which sent him to "Clip Archiver
+  settings", which exist under no such name. The description of *Leave Notes Owned by
+  Another ARCH Plugin Alone* said "ARCH X Archive"; it says ARCH X Twitter.
+- **Enter no longer deletes in the drive-media popup.** Its `keep.focus()` was overridden:
+  Obsidian focuses the first button once a popup is open, which there is *Delete*. Found
+  while testing the confirm popups below with a real Enter key press; *Keep Media* now takes
+  the focus after Obsidian's. The buttons read *Delete Media* and *Keep Media*.
+- **Two commands ask first**, as the guidelines ask of anything destructive: *Restore the
+  Bundled Transformer Scripts* overwrites an edit made to them, and *Clean Up Old Video
+  Blocks across the Vault* rewrites notes vault-wide. *Cancel* has the focus; Enter on it
+  was tried and changed nothing.
+- ***External Tools* told "all right" from "worth a look" by colour alone**, the same dot in
+  green and yellow. Now ● all right, ▲ worth a look, ○ missing, with the word as a tooltip.
+  The transformer rule rows name their three boxes (a description and a tooltip each),
+  because the grey hints vanish once a box is filled.
+- *Save the video:* is tied to its dropdown, so clicking the words opens it. The same edit
+  went into YT Playlists 1.8.2, whose `renderPlaceChoice` stays word for word the same; that
+  plugin's download popup now copies this one's.
+- "…" instead of "..." in progress notices, a count and its word ("3 videos") instead of "video(s)", and no spell-check underlines in the settings, whose fields hold paths, commands and patterns, not prose (turned off as each field gets focus, which is when Chromium draws them).
+
+## 1.18.1
 
 - **Media Extended library notes go in `_/media-lib`, not `media-lib` at the vault's
   root.** One note is written per video saved on the drive (1.17.0), so Psycho-history

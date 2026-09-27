@@ -417,21 +417,21 @@ module.exports = class ClipArchiver extends Plugin {
       this.catchUpStartupClips();
     });
 
-    this.addRibbonIcon('archive', 'Archive this clip', () => this.archiveActiveNote());
+    this.addRibbonIcon('archive', 'Archive This Clip', () => this.archiveActiveNote());
 
     this.addCommand({
       id: 'archive-active-note',
-      name: 'Archive this clip (images, transform, media)',
+      name: 'Archive This Clip (Images, Transform, Media)',
       callback: () => this.archiveActiveNote(),
     });
     this.addCommand({
       id: 'download-images-active-note',
-      name: 'Download images for this note',
+      name: 'Download Images for This Note',
       callback: () => this.withActiveNote((f) => this.doImages(f)),
     });
     this.addCommand({
       id: 'transform-active-note',
-      name: 'Transform this note with its site script',
+      name: 'Transform This Note with Its Site Script',
       callback: () => this.withActiveNote((f) => this.doTransform(f, null, true)),
     });
     // One command per download choice, rather than one that opens the choice
@@ -440,20 +440,20 @@ module.exports = class ClipArchiver extends Plugin {
     // the choice itself, so it skips the dialog and any choice remembered for
     // the session.
     for (const [mode, id, what] of [
-      ['video_and_audio', 'download-video-and-audio-active-note', 'video and audio'],
-      ['video_only', 'download-video-active-note', 'video'],
-      ['audio_only', 'download-audio-active-note', 'audio'],
-      ['subs_only', 'download-subtitles-active-note', 'subtitles'],
+      ['video_and_audio', 'download-video-and-audio-active-note', 'Video and Audio'],
+      ['video_only', 'download-video-active-note', 'Video'],
+      ['audio_only', 'download-audio-active-note', 'Audio'],
+      ['subs_only', 'download-subtitles-active-note', 'Subtitles'],
     ]) {
       this.addCommand({
         id,
-        name: `Download ${what} for this note`,
+        name: `Download ${what} for This Note`,
         callback: () => this.withActiveNote((f) => this.downloadForNote(f, mode)),
       });
     }
     this.addCommand({
       id: 'fill-video-length-active-note',
-      name: 'Fill video length for this note',
+      name: 'Fill Video Length for This Note',
       callback: () =>
         this.withActiveNote(async (f) => {
           const url =
@@ -468,74 +468,88 @@ module.exports = class ClipArchiver extends Plugin {
     });
     this.addCommand({
       id: 'relink-drive-videos',
-      name: 'Relink videos on the outside drive',
+      name: 'Relink Videos on the Outside Drive',
       callback: () => this.relinkDriveVideos(),
     });
     this.addCommand({
       id: 'move-waiting-videos-to-drive',
-      name: 'Move videos waiting for the drive now',
+      name: 'Move Videos Waiting for the Drive Now',
       callback: () => this.moveQueuedVideos(true),
     });
     this.addCommand({
       id: 'move-note-video-to-drive',
-      name: "Move this note's video to the drive",
+      name: "Move This Note's Video to the Drive",
       callback: () => this.moveActiveNoteVideo(),
     });
     this.addCommand({
       id: 'forget-active-note',
-      name: 'Forget this note, so it can be archived again',
+      name: 'Forget This Note, So It Can Be Archived Again',
       callback: () => this.withActiveNote((f) => this.forgetNote(f)),
     });
     this.addCommand({
       id: 'restore-bundled-transformers',
-      name: 'Restore the bundled transformer scripts',
-      callback: () => {
-        const written = this.ensureTransformers(true);
-        new Notice(
-          written.length
-            ? `Restored ${written.length} transformer script${written.length === 1 ? '' : 's'}.`
-            : 'Could not write the transformer scripts. See the console.'
-        );
-      },
+      name: 'Restore the Bundled Transformer Scripts',
+      callback: () =>
+        new ConfirmModal(
+          this.app,
+          'Restore the Bundled Transformer Scripts?',
+          'The scripts in the plugin\u2019s transformers folder are replaced with the copies that came with this version. An edit made to one of them is lost.',
+          'Restore Scripts',
+          () => {
+            const written = this.ensureTransformers(true);
+            new Notice(
+              written.length
+                ? `Restored ${plural(written.length, 'transformer script')}.`
+                : 'Could not write the transformer scripts. See the console.'
+            );
+          }
+        ).open(),
     });
     this.addCommand({
       id: 'diagnose',
-      name: 'Set up external tools (yt-dlp, ffmpeg, Python)',
+      name: 'Set Up External Tools (yt-dlp, ffmpeg, Python)',
       callback: () => this.diagnose(),
     });
     this.addCommand({
       id: 'embed-local-player',
-      name: 'Embed the downloaded media in this note',
+      name: 'Embed the Downloaded Media in This Note',
       callback: () => this.withActiveNote((f) => this.embedFromFrontmatter(f)),
     });
     this.addCommand({
       id: 'clean-video-blocks',
-      name: 'Clean up old video blocks across the vault',
-      callback: () => this.cleanVideoBlocks(),
+      name: 'Clean Up Old Video Blocks across the Vault',
+      callback: () =>
+        new ConfirmModal(
+          this.app,
+          'Clean Up Old Video Blocks?',
+          'Every note in this vault with an old arch-video block has it replaced by a plain embed of the video, or removed when the video cannot be found.',
+          'Clean Up Notes',
+          () => this.cleanVideoBlocks()
+        ).open(),
     });
     this.addCommand({
       id: 'diagnose-embed',
-      name: 'Diagnose how this note renders media',
+      name: 'Diagnose How This Note Renders Media',
       callback: () => this.diagnoseEmbed(),
     });
     this.addCommand({
       id: 'show-guide',
-      name: 'How this plugin works',
+      name: 'How This Plugin Works',
       callback: () => new GuideModal(this.app, this).open(),
     });
     this.addCommand({
       id: 'inspect-active-note',
-      name: 'Inspect this note (what Clip Archiver sees)',
+      name: 'Inspect This Note (What After Clipping Sees)',
       callback: () => this.withActiveNote((f) => this.inspect(f)),
     });
     this.addCommand({
       id: 'probe-runtimes',
-      name: 'Check what yt-dlp can see (JavaScript runtime and solver)',
+      name: 'Check What yt-dlp Can See (JavaScript Runtime and Solver)',
       callback: () => this.probeRuntimes(),
     });
     this.addCommand({
       id: 'list-formats',
-      name: 'List available formats for this note\u2019s URL',
+      name: 'List Available Formats for This Note\u2019s URL',
       callback: () =>
         this.withActiveNote(async (f) => {
           const url =
@@ -565,11 +579,11 @@ module.exports = class ClipArchiver extends Plugin {
         if (missing.length) {
           new Notice(
             `${missing.join(' and ')} not found. Open Settings \u2192 ARCH After Clipping \u2192 ` +
-              'Set up external tools and press Install.',
+              'Set Up External Tools and press Install.',
             15000
           );
         } else if (filled.length) {
-          new Notice(`Clip Archiver configured itself: ${filled.length} setting(s) filled in.`, 8000);
+          new Notice(`After Clipping configured itself: ${plural(filled.length, 'setting')} filled in.`, 8000);
         }
       });
     }
@@ -760,7 +774,7 @@ module.exports = class ClipArchiver extends Plugin {
       new Notice(
         failed.length
           ? `Deleted ${done} file(s); ${failed.length} could not be deleted. See the console.`
-          : `Deleted ${done} file(s) with the note${groups.length > 1 ? 's' : ''}.`,
+          : `Deleted ${plural(done, 'file')} with the note${groups.length > 1 ? 's' : ''}.`,
         8000
       );
     }).open();
@@ -801,7 +815,7 @@ module.exports = class ClipArchiver extends Plugin {
     if (!manual && !this.automaticHere()) return;
     const root = String(this.settings.externalVideoFolder || '').trim();
     if (!root || !driveMounted(root)) {
-      if (manual) new Notice(`${q.length} video(s) wait for ${root ? path.basename(driveOf(root) || root) : 'the drive'}, which is not plugged in.`);
+      if (manual) new Notice(`${plural(q.length, 'video')} ${q.length === 1 ? 'waits' : 'wait'} for ${root ? path.basename(driveOf(root) || root) : 'the drive'}, which is not plugged in.`);
       return;
     }
     this.movingToDrive = true;
@@ -817,7 +831,7 @@ module.exports = class ClipArchiver extends Plugin {
     } finally {
       this.movingToDrive = false;
     }
-    if (moved) new Notice(`Moved ${moved} video(s) from the vault to the drive.`);
+    if (moved) new Notice(`Moved ${plural(moved, 'video')} from the vault to the drive.`);
   }
 
   // Copies the vault video to <Videos outside the vault>/<vault>/<its vault
@@ -829,7 +843,7 @@ module.exports = class ClipArchiver extends Plugin {
     const tf = this.app.vault.getAbstractFileByPath(videoPath);
     if (!(tf instanceof TFile)) return { ok: false, keep: false, why: 'no longer in the vault' };
     const root = String(this.settings.externalVideoFolder || '').trim();
-    if (!root || !path.isAbsolute(root)) return { ok: false, keep: true, why: 'Videos outside the vault is not set' };
+    if (!root || !path.isAbsolute(root)) return { ok: false, keep: true, why: 'Videos Outside the Vault is not set' };
     if (!driveMounted(root)) return { ok: false, keep: true, why: 'the drive is not plugged in' };
     const base = this.app.vault.adapter.getBasePath();
     const src = path.join(base, tf.path);
@@ -1081,7 +1095,7 @@ module.exports = class ClipArchiver extends Plugin {
     }
     if (!script || !fs.existsSync(script)) {
       this.log(`relink: no script at "${script}"`);
-      return new Notice('Relink script not found. Set it under "Relink script" in ARCH After Clipping\'s settings.');
+      return new Notice('Relink script not found. Set it under "Relink Script" in ARCH After Clipping\'s settings.');
     }
     const notice = new Notice('Relinking videos on the outside drive…', 0);
     this.log(`relink: running ${script}`);
@@ -1388,7 +1402,7 @@ module.exports = class ClipArchiver extends Plugin {
     }
     return Promise.resolve(fn(file)).catch((e) => {
       console.error('[ArchAfterClipping]', e);
-      new Notice('Clip Archiver hit an error. Open the developer console for details.');
+      new Notice('After Clipping hit an error. Open the developer console for details.');
     });
   }
 
@@ -1444,7 +1458,7 @@ module.exports = class ClipArchiver extends Plugin {
         );
         if (manual) {
           new Notice(
-            `No source URL in this note. Run "Inspect this note" to see what Clip Archiver reads.`,
+            `No source URL in this note. Run "Inspect This Note" to see what After Clipping reads.`,
             12000
           );
         }
@@ -1578,7 +1592,7 @@ module.exports = class ClipArchiver extends Plugin {
       }
     } catch (err) {
       console.error('[ArchAfterClipping] pipeline error on', file.path, err);
-      new Notice('Clip Archiver failed on this note. Open the developer console for details.');
+      new Notice('After Clipping failed on this note. Open the developer console for details.');
     } finally {
       this.inFlight.delete(file.path);
     }
@@ -2299,7 +2313,7 @@ module.exports = class ClipArchiver extends Plugin {
 
     const python = await this.resolvePython();
     if (!python) {
-      new Notice('Python was not found. Set its full path in Clip Archiver settings.');
+      new Notice('Python was not found. Set its full path under Python Command in After Clipping\'s settings.');
       return;
     }
 
@@ -2411,7 +2425,7 @@ module.exports = class ClipArchiver extends Plugin {
     const tool = await this.findBinary('yt-dlp');
     if (!tool.found) {
       new Notice(
-        'yt-dlp is not installed, so nothing can be downloaded. Open "Set up external tools" ' +
+        'yt-dlp is not installed, so nothing can be downloaded. Open "Set Up External Tools" ' +
           'and press Install.',
         14000
       );
@@ -2426,7 +2440,7 @@ module.exports = class ClipArchiver extends Plugin {
     if (!this.settings.videoFolder) {
       // Silence here is what makes downloading look broken, so always speak up.
       new Notice(
-        'Clip Archiver found media but no download folder is set. Open settings \u2192 Video and audio \u2192 Media folder.',
+        'After Clipping found media but no download folder is set. Open settings \u2192 Video and Audio \u2192 Media Folder.',
         12000
       );
       return;
@@ -2450,7 +2464,7 @@ module.exports = class ClipArchiver extends Plugin {
       if (this.isExtractionBroken(err)) {
         new Notice(
           'yt-dlp recognised the page but could not get any video or audio from it. ' +
-            'Open "Set up external tools" — the YouTube challenge solver is most likely missing.',
+            'Open "Set Up External Tools" — the YouTube challenge solver is most likely missing.',
           14000
         );
       } else if (manual) {
@@ -2576,7 +2590,7 @@ module.exports = class ClipArchiver extends Plugin {
       return;
     }
 
-    const notice = new Notice(`Downloading media for "${file.basename}"...`, 0);
+    const notice = new Notice(`Downloading media for "${file.basename}"…`, 0);
     const saved = [];
     const failures = [];
     let stagedAudio = null;
@@ -2691,7 +2705,7 @@ module.exports = class ClipArchiver extends Plugin {
       if (extractInstead && saved.length) {
         const video = saved.find((f) => /\.(mp4|webm|mkv|mov|avi)$/i.test(f));
         if (video) {
-          notice.setMessage('Extracting audio from the downloaded video...');
+          notice.setMessage('Extracting audio from the downloaded video…');
           const audio = await this.extractAudioFrom(video, folder);
           if (audio) {
             saved.push(audio);
@@ -2699,7 +2713,7 @@ module.exports = class ClipArchiver extends Plugin {
             // Extraction is the fast path, not the only one. If ffmpeg cannot
             // do it, fall back to fetching the audio rather than giving up.
             this.log('extraction failed, downloading the audio instead');
-            notice.setMessage('Could not extract the audio, downloading it instead...');
+            notice.setMessage('Could not extract the audio, downloading it instead…');
             const [, r] = await guard('audio', runAudio);
             if (!r.ok) failures.push(['audio', r]);
           }
@@ -2903,7 +2917,7 @@ module.exports = class ClipArchiver extends Plugin {
       console.error(`[ArchAfterClipping] ${which} could not be run: ${stderr}`);
       new Notice(
         `${which} was not found at "${which === 'ffmpeg' ? this.settings.ffmpegLocation : this.settings.ytDlpPath}". ` +
-          'Open "Set up external tools" and install it.',
+          'Open "Set Up External Tools" and install it.',
         14000
       );
       return;
@@ -2914,7 +2928,7 @@ module.exports = class ClipArchiver extends Plugin {
     if (/403|Forbidden/i.test(stderr)) {
       new Notice(
         `yt-dlp got 403 on the ${kind} stream through ${result.attempts} different attempts. ` +
-          'Open "Set up external tools" — a stale yt-dlp, expired cookies, or a missing JavaScript ' +
+          'Open "Set Up External Tools" — a stale yt-dlp, expired cookies, or a missing JavaScript ' +
           'runtime cause almost all of these.',
         14000
       );
@@ -2926,13 +2940,13 @@ module.exports = class ClipArchiver extends Plugin {
     } else if (this.isExtractionBroken(stderr)) {
       new Notice(
         'YouTube could not solve its JavaScript challenge, so no usable formats came back. ' +
-          'Check that Remote components is set to ejs:github in settings, and that a JavaScript ' +
-          'runtime shows up under "Set up external tools".',
+          'Check that Remote Components is set to ejs:github in settings, and that a JavaScript ' +
+          'runtime shows up under "Set Up External Tools".',
         16000
       );
     } else if (/ffmpeg|ffprobe/i.test(stderr)) {
       new Notice(
-        'yt-dlp could not find ffmpeg. Open "Set up external tools" to install it.',
+        'yt-dlp could not find ffmpeg. Open "Set Up External Tools" to install it.',
         12000
       );
     } else {
@@ -2985,7 +2999,7 @@ module.exports = class ClipArchiver extends Plugin {
         if (!this.isRetryable(last.stderr)) break;
         if (step.waitMs) await sleep(step.waitMs);
         this.log(`${kind}: attempt ${i + 1}, ${step.label}`);
-        if (notice) notice.setMessage(`Retrying ${kind} (${step.label})...`);
+        if (notice) notice.setMessage(`Retrying ${kind} (${step.label})…`);
       }
 
       let args = [...baseArgs];
@@ -3686,7 +3700,7 @@ module.exports = class ClipArchiver extends Plugin {
       // that fetch is disabled unless --remote-components is passed.
       return this.settings.remoteComponents
         ? { found: true, how: `bundled, solver script enabled via --remote-components ${this.settings.remoteComponents}`, installable: false }
-        : { found: false, how: 'bundled, but the solver script fetch is disabled - set Remote components to ejs:github', installable: false };
+        : { found: false, how: 'bundled, but the solver script fetch is disabled - set Remote Components to ejs:github', installable: false };
     }
     const py = report.python.found ? report.python.path : await this.resolvePython();
     if (!py) return { found: false, how: 'cannot check without Python', installable: false };
@@ -3705,7 +3719,7 @@ module.exports = class ClipArchiver extends Plugin {
 
   async installEjs() {
     const py = (await this.resolvePython()) || 'python3';
-    const notice = new Notice('Installing yt-dlp-ejs...', 0);
+    const notice = new Notice('Installing yt-dlp-ejs…', 0);
     const run = (args) =>
       this.runProcess(py, args, { timeoutMs: 300000 }).catch((e) => ({
         code: 1,
@@ -3715,7 +3729,7 @@ module.exports = class ClipArchiver extends Plugin {
 
     let r = await run(['-m', 'pip', 'install', '-U', 'yt-dlp-ejs']);
     if (r.code !== 0 && /externally-managed|--break-system-packages/i.test(r.stdout + r.stderr)) {
-      notice.setMessage('Retrying with --break-system-packages...');
+      notice.setMessage('Retrying with --break-system-packages…');
       r = await run(['-m', 'pip', 'install', '-U', '--break-system-packages', 'yt-dlp-ejs']);
     }
     notice.hide();
@@ -3736,7 +3750,7 @@ module.exports = class ClipArchiver extends Plugin {
   // YouTube challenge solving can work at all: the optional libraries list must
   // contain yt_dlp_ejs, and the JS runtimes list must not be empty.
   async probeRuntimes(url = 'https://www.youtube.com/watch?v=BaW_jenozKc') {
-    const notice = new Notice('Asking yt-dlp what it can see...', 0);
+    const notice = new Notice('Asking yt-dlp what it can see…', 0);
     const r = await this.runYtDlp(['-v', '--simulate', '--ignore-no-formats-error', url], 90000).catch(
       (e) => ({ code: 1, stdout: '', stderr: String(e.message) })
     );
@@ -3761,7 +3775,7 @@ module.exports = class ClipArchiver extends Plugin {
     lines.push('');
     if (!hasRuntime) {
       lines.push('yt-dlp cannot see a JavaScript runtime, so it cannot solve YouTube\u2019s');
-      lines.push('challenges. Set the JavaScript runtime setting to a name and full path,');
+      lines.push('challenges. Set the JavaScript Runtime setting to a name and full path,');
       lines.push('for example: node:/usr/local/bin/node');
     } else if (!hasEjs) {
       lines.push('The runtime is there but the solver library is not. Reinstall yt-dlp from');
@@ -3779,7 +3793,7 @@ module.exports = class ClipArchiver extends Plugin {
 
   // Runs yt-dlp -F so you can see whether real formats exist or only storyboards.
   async listFormats(url) {
-    const notice = new Notice('Asking yt-dlp what formats exist...', 0);
+    const notice = new Notice('Asking yt-dlp what formats exist…', 0);
     const r = await this.runYtDlp(['-F', '--ignore-no-formats-error', url], 90000).catch((e) => ({
       code: 1,
       stdout: '',
@@ -3869,7 +3883,7 @@ module.exports = class ClipArchiver extends Plugin {
   }
 
   async installYtDlp() {
-    const notice = new Notice('Fetching yt-dlp...', 0);
+    const notice = new Notice('Fetching yt-dlp…', 0);
     try {
       fs.mkdirSync(this.binDir(), { recursive: true });
       const dest = path.join(this.binDir(), this.exeName('yt-dlp'));
@@ -3913,7 +3927,7 @@ module.exports = class ClipArchiver extends Plugin {
 
   async updateYtDlp() {
     const bin = this.settings.ytDlpPath || 'yt-dlp';
-    const notice = new Notice('Updating yt-dlp...', 0);
+    const notice = new Notice('Updating yt-dlp…', 0);
 
     const run = (cmd, args, timeoutMs = 300000) =>
       this.runProcess(cmd, args, { timeoutMs }).catch((e) => ({
@@ -3935,12 +3949,12 @@ module.exports = class ClipArchiver extends Plugin {
 
     // 2. It told us how it was installed, so use that channel instead.
     if (/pip|PyPi|wheel/i.test(combined)) {
-      notice.setMessage('Updating yt-dlp through pip...');
+      notice.setMessage('Updating yt-dlp through pip…');
       const py = (await this.resolvePython()) || 'python3';
       let p = await run(py, ['-m', 'pip', 'install', '-U', 'yt-dlp']);
       // Newer distributions refuse to touch a managed environment without this.
       if (p.code !== 0 && /externally-managed|--break-system-packages/i.test(p.stdout + p.stderr)) {
-        notice.setMessage('Retrying pip with --break-system-packages...');
+        notice.setMessage('Retrying pip with --break-system-packages…');
         p = await run(py, ['-m', 'pip', 'install', '-U', '--break-system-packages', 'yt-dlp']);
       }
       notice.hide();
@@ -3959,7 +3973,7 @@ module.exports = class ClipArchiver extends Plugin {
     }
 
     if (/brew|Homebrew/i.test(combined)) {
-      notice.setMessage('Updating yt-dlp through Homebrew...');
+      notice.setMessage('Updating yt-dlp through Homebrew…');
       const b = await run('brew', ['upgrade', 'yt-dlp']);
       notice.hide();
       if (b.code === 0 || /already installed|up-to-date/i.test(b.stdout + b.stderr)) {
@@ -4008,7 +4022,7 @@ module.exports = class ClipArchiver extends Plugin {
       return false;
     }
 
-    const notice = new Notice('Fetching ffmpeg...', 0);
+    const notice = new Notice('Fetching ffmpeg…', 0);
     try {
       fs.mkdirSync(this.binDir(), { recursive: true });
       const archive = path.join(this.binDir(), asset.name);
@@ -4018,7 +4032,7 @@ module.exports = class ClipArchiver extends Plugin {
         notice.setMessage(`Fetching ffmpeg... ${Math.round((done / total) * 100)}%`);
       });
 
-      notice.setMessage('Unpacking ffmpeg...');
+      notice.setMessage('Unpacking ffmpeg…');
       const extractDir = path.join(this.binDir(), 'ffmpeg-tmp');
       fs.mkdirSync(extractDir, { recursive: true });
 
@@ -4087,7 +4101,7 @@ module.exports = class ClipArchiver extends Plugin {
     if (report.ytdlp.found && path.isAbsolute(report.ytdlp.path)) {
       if (report.ytdlp.path !== this.settings.ytDlpPath) {
         this.settings.ytDlpPath = report.ytdlp.path;
-        filled.push(`yt-dlp path \u2192 ${report.ytdlp.path}`);
+        filled.push(`yt-dlp Path \u2192 ${report.ytdlp.path}`);
       }
     }
 
@@ -4095,20 +4109,20 @@ module.exports = class ClipArchiver extends Plugin {
       const dir = path.dirname(report.ffmpeg.path);
       if (dir !== this.settings.ffmpegLocation) {
         this.settings.ffmpegLocation = dir;
-        filled.push(`ffmpeg folder \u2192 ${dir}`);
+        filled.push(`ffmpeg Folder \u2192 ${dir}`);
       }
     }
 
     if (report.python.found && !this.settings.pythonPath) {
       this.settings.pythonPath = report.python.path;
-      filled.push(`Python command \u2192 ${report.python.path}`);
+      filled.push(`Python Command \u2192 ${report.python.path}`);
     }
 
     // Nothing downloads while the media folder is empty, so give it one.
     const tool = await this.findBinary('yt-dlp');
     if (!tool.found) {
       new Notice(
-        'yt-dlp is not installed, so nothing can be downloaded. Open "Set up external tools" ' +
+        'yt-dlp is not installed, so nothing can be downloaded. Open "Set Up External Tools" ' +
           'and press Install.',
         14000
       );
@@ -4122,7 +4136,7 @@ module.exports = class ClipArchiver extends Plugin {
 
     if (!this.settings.videoFolder) {
       this.settings.videoFolder = 'media';
-      filled.push('Media folder \u2192 media (vault-relative)');
+      filled.push('Media Folder \u2192 media (vault-relative)');
     }
 
     // Pick the browser whose profile was touched most recently.
@@ -4131,14 +4145,14 @@ module.exports = class ClipArchiver extends Plugin {
     if (!this.settings.jsRuntime && report.jsRuntime && report.jsRuntime.found &&
         path.isAbsolute(report.jsRuntime.path || '')) {
       this.settings.jsRuntime = `${report.jsRuntime.name}:${report.jsRuntime.path}`;
-      filled.push(`JavaScript runtime \u2192 ${this.settings.jsRuntime}`);
+      filled.push(`JavaScript Runtime \u2192 ${this.settings.jsRuntime}`);
     }
 
     if (!this.settings.cookiesFile && !this.settings.cookiesFromBrowser) {
       const browsers = report.browsers || this.detectBrowsers();
       if (browsers.length) {
         this.settings.cookiesFromBrowser = browsers[0].name;
-        filled.push(`Cookies from browser \u2192 ${browsers[0].name}`);
+        filled.push(`Cookies from Browser \u2192 ${browsers[0].name}`);
       }
     }
 
@@ -4149,7 +4163,7 @@ module.exports = class ClipArchiver extends Plugin {
   /* ---------------- diagnostics ---------------- */
 
   async diagnose(onDone = null) {
-    const notice = new Notice('Looking for yt-dlp, ffmpeg, Python, browsers...', 0);
+    const notice = new Notice('Looking for yt-dlp, ffmpeg, Python, browsers…', 0);
     const report = await this.detectTools();
     const filled = await this.autoConfigureFromDetection(report);
     notice.hide();
@@ -4284,8 +4298,8 @@ function renderPlaceChoice(el, info, onPick) {
   const row = el.createDiv({
     attr: { style: 'display:flex; align-items:center; gap:8px; margin-top:10px;' },
   });
-  row.createEl('label', { text: 'Save the video:', attr: { style: 'font-size:var(--font-ui-smaller);' } });
-  const sel = row.createEl('select', { cls: 'dropdown' });
+  row.createEl('label', { text: 'Save the video:', attr: { for: 'arch-save-video-place', style: 'font-size:var(--font-ui-smaller);' } });
+  const sel = row.createEl('select', { cls: 'dropdown', attr: { id: 'arch-save-video-place' } });
   const drive = sel.createEl('option', {
     text: info.mounted ? `On ${info.drive}` : `On ${info.drive} (not plugged in)`,
     attr: { value: 'drive' },
@@ -4302,6 +4316,9 @@ function renderPlaceChoice(el, info, onPick) {
   }
 }
 
+// "1 video", "3 videos": a count and its word, never "video(s)".
+function plural(n, word) { return `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`; }
+
 class DownloadModeModal extends Modal {
   constructor(app, noteName, url, onChoice, placeInfo) {
     super(app);
@@ -4316,7 +4333,7 @@ class DownloadModeModal extends Modal {
 
   onOpen() {
     const { contentEl, titleEl } = this;
-    titleEl.setText('Download this media?');
+    titleEl.setText('Download This Media?');
 
     contentEl.createEl('p', { text: this.noteName });
     contentEl.createEl('p', {
@@ -4389,7 +4406,7 @@ const GUIDE = [
    'Nothing needs to be run by hand. Saving the clip is the whole workflow.'],
 
   ['The one thing to set up',
-   'Open Set up external tools. It finds yt-dlp, ffmpeg, Python and your ' +
+   'Open Set Up External Tools. It finds yt-dlp, ffmpeg, Python and your ' +
    'browser cookies, fills the paths in, and installs anything missing.\n\n' +
    'Then set the media folder. That is the entire setup.'],
 
@@ -4433,10 +4450,10 @@ const GUIDE = [
    'output is refused, so a script can never blank a note.'],
 
   ['When something looks wrong',
-   'Inspect this note shows exactly what the plugin can see: the source URL and ' +
+   'Inspect This Note shows exactly what the plugin can see: the source URL and ' +
    'which property it came from, whether the address counts as media, which script ' +
    'matches, and whether the media folder is set.\n\n' +
-   'Set up external tools reports tool versions and flags a yt-dlp build old ' +
+   'Set Up External Tools reports tool versions and flags a yt-dlp build old ' +
    'enough to cause 403 errors, which is the usual reason a download fails.'],
 ];
 
@@ -4464,14 +4481,46 @@ class DriveMediaDeleteModal extends Modal {
       attr: { style: 'font-size:var(--font-ui-smaller); opacity:.7;' },
     });
     const row = contentEl.createDiv({ cls: 'modal-button-container' });
-    const del = row.createEl('button', { text: 'Delete', cls: 'mod-warning' });
+    const del = row.createEl('button', { text: 'Delete Media', cls: 'mod-warning' });
     del.onclick = () => {
       this.close();
       this.onDelete();
     };
-    const keep = row.createEl('button', { text: 'Keep' });
+    const keep = row.createEl('button', { text: 'Keep Media' });
     keep.onclick = () => this.close();
-    keep.focus();
+    // Obsidian focuses the first button once the popup is open, which here is
+    // Delete Media, so Enter would delete; Keep Media takes the focus after it.
+    setTimeout(() => keep.focus(), 0);
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+// Asks before a command that overwrites files or rewrites notes (1.18.2).
+class ConfirmModal extends Modal {
+  constructor(app, title, text, action, onYes) {
+    super(app);
+    this.title = title;
+    this.text = text;
+    this.action = action;
+    this.onYes = onYes;
+  }
+
+  onOpen() {
+    this.titleEl.setText(this.title);
+    this.contentEl.createEl('p', { text: this.text });
+    const row = this.contentEl.createDiv({ cls: 'modal-button-container' });
+    const yes = row.createEl('button', { text: this.action, cls: 'mod-warning' });
+    yes.onclick = () => {
+      this.close();
+      this.onYes();
+    };
+    const no = row.createEl('button', { text: 'Cancel' });
+    no.onclick = () => this.close();
+    // After Obsidian's own focus on the first button, so Enter cancels.
+    setTimeout(() => no.focus(), 0);
   }
 
   onClose() {
@@ -4515,7 +4564,7 @@ class InspectModal extends Modal {
   }
 
   onOpen() {
-    this.titleEl.setText('What Clip Archiver sees');
+    this.titleEl.setText('What After Clipping Sees');
     const pre = this.contentEl.createEl('pre', {
       attr: {
         style:
@@ -4541,7 +4590,7 @@ class SetupModal extends Modal {
   }
 
   onOpen() {
-    this.titleEl.setText('External tools');
+    this.titleEl.setText('External Tools');
     this.render();
   }
 
@@ -4556,9 +4605,13 @@ class SetupModal extends Modal {
     s.setDesc(detail);
     s.nameEl.prepend(
       createSpan({
-        text: state === 'ok' ? '\u25CF ' : state === 'warn' ? '\u25CF ' : '\u25CB ',
+        // A different mark per state, not only a different colour: ● all
+        // right, ▲ worth a look, ○ missing; the word is the tooltip.
+        text: state === 'ok' ? '\u25CF ' : state === 'warn' ? '\u25B2 ' : '\u25CB ',
         attr: {
           style: `color: var(--color-${state === 'ok' ? 'green' : state === 'warn' ? 'yellow' : 'red'});`,
+          title: state === 'ok' ? 'All right' : state === 'warn' ? 'Worth a look' : 'Missing',
+          'aria-label': state === 'ok' ? 'All right' : state === 'warn' ? 'Worth a look' : 'Missing',
         },
       })
     );
@@ -4618,7 +4671,7 @@ class SetupModal extends Modal {
     if (r.ytdlp.found && r.ytdlp.installMethod !== 'standalone') {
       ytRow.addButton((b) =>
         b
-          .setButtonText('Install standalone')
+          .setButtonText('Install Standalone')
           .setTooltip('Downloads a self-updating copy into the plugin folder. Your existing install is left untouched.')
           .onClick(async () => {
             await this.plugin.installYtDlp();
@@ -4644,7 +4697,7 @@ class SetupModal extends Modal {
 
     // JavaScript runtime
     this.row(
-      'JavaScript runtime',
+      'JavaScript Runtime',
       r.jsRuntime.found ? 'ok' : 'warn',
       r.jsRuntime.found
         ? `${r.jsRuntime.name} ${r.jsRuntime.version}`
@@ -4656,7 +4709,7 @@ class SetupModal extends Modal {
     // YouTube challenge solver
     const ejs = r.ejs || { found: false, how: 'unknown', installable: false };
     this.row(
-      'YouTube challenge solver',
+      'YouTube Challenge Solver',
       ejs.found ? 'ok' : 'missing',
       ejs.found
         ? ejs.how
@@ -4709,7 +4762,7 @@ class SetupModal extends Modal {
       if (s.cookiesFromBrowser) {
         cookieRow.addButton((b) =>
           b.setButtonText('Test').onClick(async () => {
-            const n = new Notice(`Testing ${s.cookiesFromBrowser} cookies...`, 0);
+            const n = new Notice(`Testing ${s.cookiesFromBrowser} cookies…`, 0);
             const res = await this.plugin.testCookies(s.cookiesFromBrowser);
             n.hide();
             new Notice(
@@ -4732,14 +4785,14 @@ class SetupModal extends Modal {
       /* folder missing */
     }
     this.row(
-      'Transformer scripts',
+      'Transformer Scripts',
       scripts.length ? 'ok' : 'missing',
       scripts.length ? scripts.join(', ') : `No .py files in ${dir}`,
       null
     );
 
     new Setting(contentEl)
-      .addButton((b) => b.setButtonText('Check again').onClick(() => this.refresh()))
+      .addButton((b) => b.setButtonText('Check Again').onClick(() => this.refresh()))
       .addButton((b) => b.setButtonText('Close').setCta().onClick(() => this.close()));
   }
 
@@ -4757,6 +4810,11 @@ class ClipArchiverSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+    // Its fields hold paths, commands, patterns and lists, not prose, so no
+    // spell-check underlines; set as each one gets focus, which is when they appear.
+    this.containerEl.addEventListener('focusin', (e) => {
+      if (e.target.matches('input[type="text"], input:not([type]), textarea')) e.target.spellcheck = false;
+    });
   }
 
   save() {
@@ -4769,14 +4827,14 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName('How this plugin works')
+      .setName('How This Plugin Works')
       .setDesc('A short guide to what happens to a clip and where to look when something goes wrong.')
       .addButton((b) =>
-        b.setButtonText('Read the guide').onClick(() => new GuideModal(this.app, this.plugin).open())
+        b.setButtonText('Read the Guide').onClick(() => new GuideModal(this.app, this.plugin).open())
       );
 
     new Setting(containerEl)
-      .setName('Archive new notes automatically')
+      .setName('Archive New Notes Automatically')
       .setDesc('Turn this off to keep the ribbon button and commands but stop the automatic run.')
       .addToggle((t) =>
         t.setValue(s.enabled).onChange(async (v) => {
@@ -4786,10 +4844,10 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     /* ---- scope ---- */
-    new Setting(containerEl).setName('What to watch').setHeading();
+    new Setting(containerEl).setName('What to Watch').setHeading();
 
     new Setting(containerEl)
-      .setName('Watch every folder')
+      .setName('Watch Every Folder')
       .setDesc('Any new markdown note gets archived, wherever it lands. Turn off to name specific folders.')
       .addToggle((t) =>
         t.setValue(s.watchAllFolders).onChange(async (v) => {
@@ -4801,7 +4859,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     if (!s.watchAllFolders) {
       new Setting(containerEl)
-        .setName('Folders to watch')
+        .setName('Folders to Watch')
         .setDesc('Comma-separated, vault-relative. Example: +, Clippings, Inbox/Web')
         .addText((t) =>
           t.setValue(s.clipFolders.join(', ')).onChange(async (v) => {
@@ -4812,7 +4870,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName('Folders to ignore')
+      .setName('Folders to Ignore')
       .setDesc('Checked before everything else. Useful for a music or archive folder you never clip into.')
       .addText((t) =>
         t.setValue(s.excludeFolders.join(', ')).onChange(async (v) => {
@@ -4822,7 +4880,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Source URL properties')
+      .setName('Source URL Properties')
       .setDesc(
         'Comma-separated, tried in order. Web Clipper\u2019s default template uses "source"; ' +
           'custom templates often use "url". If none match, any property holding a web address is used.'
@@ -4838,12 +4896,12 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('When a page is already clipped')
+      .setName('When a Page Is Already Clipped')
       .setDesc('Matched on the url property. Both notes are always kept \u2014 nothing is ever deleted.')
       .addDropdown((d) =>
         d
-          .addOption('warn', 'Tell me')
-          .addOption('ignore', 'Do nothing')
+          .addOption('warn', 'Tell Me')
+          .addOption('ignore', 'Do Nothing')
           .setValue(s.duplicateAction === 'ignore' ? 'ignore' : 'warn')
           .onChange(async (v) => {
             s.duplicateAction = v;
@@ -4855,7 +4913,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Images').setHeading();
 
     new Setting(containerEl)
-      .setName('Download images into the vault')
+      .setName('Download Images into the Vault')
       .addToggle((t) =>
         t.setValue(s.downloadImages).onChange(async (v) => {
           s.downloadImages = v;
@@ -4864,11 +4922,11 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Leave notes owned by another ARCH plugin alone')
+      .setName('Leave Notes Owned by Another ARCH Plugin Alone')
       .setDesc(
         'Comma-separated property names. A note carrying any of them is skipped by the automatic pass. ' +
           'ARCH YT Playlists writes yt-playlist on video notes and dl-all on playlist notes; ' +
-          'ARCH X Archive writes x-author and x-name on both of its note types. ' +
+          'ARCH X Twitter writes x-author and x-name on both of its note types. ' +
           'Commands run by hand still work on those notes.'
       )
       .addText((t) =>
@@ -4879,7 +4937,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Leave notes carrying these tags alone')
+      .setName('Leave Notes Carrying These Tags Alone')
       .setDesc(
         'Comma-separated tags, the same skip by tag rather than by property. ' +
           'ARCH YT Playlists tags its channel notes yt-channel and writes no marker property on them; ' +
@@ -4893,11 +4951,11 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Download images only in these folders')
+      .setName('Download Images Only in These Folders')
       .setDesc(
         'Comma-separated, subfolders included. Leave blank for every folder. ' +
           'Media is not affected: videos still download anywhere the plugin runs. ' +
-          'Running "Download images for this note" by hand ignores this list.'
+          'Running "Download Images for This Note" by hand ignores this list.'
       )
       .addText((t) =>
         t.setValue((s.imageFolders || []).join(', ')).onChange(async (v) => {
@@ -4907,15 +4965,15 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Image location')
+      .setName('Image Location')
       .setDesc('Where downloaded images are saved, using the same choices as Obsidian\'s own attachment setting.')
       .addDropdown((d) =>
         d
-          .addOption('obsidian', 'Follow Obsidian\'s attachment setting')
-          .addOption('vault', 'Vault folder')
-          .addOption('same', 'Same folder as the note')
-          .addOption('subfolder', 'In subfolder under the note')
-          .addOption('specified', 'In the folder specified below')
+          .addOption('obsidian', 'Follow Obsidian\'s Attachment Setting')
+          .addOption('vault', 'Vault Folder')
+          .addOption('same', 'Same Folder as the Note')
+          .addOption('subfolder', 'In Subfolder under the Note')
+          .addOption('specified', 'In the Folder Specified Below')
           .setValue(s.imageLocationMode || 'obsidian')
           .onChange(async (v) => {
             s.imageLocationMode = v;
@@ -4926,7 +4984,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     if (s.imageLocationMode === 'subfolder') {
       new Setting(containerEl)
-        .setName('Image subfolder name')
+        .setName('Image Subfolder Name')
         .setDesc('Created inside the note\'s own folder. Supports {{notename}} and {{date}}.')
         .addText((t) =>
           t.setValue(s.imageSubfolder).onChange(async (v) => {
@@ -4938,7 +4996,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     if (s.imageLocationMode === 'specified') {
       new Setting(containerEl)
-        .setName('Image folder')
+        .setName('Image Folder')
         .setDesc('Path from the vault root. Supports {{notename}}, {{notepath}} and {{date}}.')
         .addText((t) =>
           t.setValue(s.imageFolder).onChange(async (v) => {
@@ -4949,7 +5007,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName('Image file name')
+      .setName('Image File Name')
       .setDesc('Supports {{notename}} and {{index}}.')
       .addText((t) =>
         t.setValue(s.imageNameTemplate).onChange(async (v) => {
@@ -4959,7 +5017,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Repoint image properties too')
+      .setName('Repoint Image Properties Too')
       .setDesc('Rewrites frontmatter properties that hold a picture address into a [[wikilink]] to the saved file, keeping any label the value carried.')
       .addToggle((t) =>
         t.setValue(s.rewriteFrontmatterImages).onChange(async (v) => {
@@ -4969,7 +5027,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Image properties')
+      .setName('Image Properties')
       .setDesc('Comma-separated property names to check.')
       .addText((t) =>
         t.setValue(s.frontmatterImageKeys.join(', ')).onChange(async (v) => {
@@ -4979,7 +5037,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Labels for image properties')
+      .setName('Labels for Image Properties')
       .setDesc('Comma-separated property=Label pairs, used when the value has no label of its own. A label the template already gave, as in [Thumbnail](url), is kept. A property listed here is written as [[file.webp|Label]]; any other stays a bare [[file.webp]]. Example: banner=Banner, icon=Icon')
       .addText((t) =>
         t.setPlaceholder('banner=Banner, icon=Icon')
@@ -4993,7 +5051,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Transform').setHeading();
 
     new Setting(containerEl)
-      .setName('Run a site script on the body')
+      .setName('Run a Site Script on the Body')
       .setDesc('Matches the source URL against the rules below and pipes the note body through that script.')
       .addToggle((t) =>
         t.setValue(s.enableTransform).onChange(async (v) => {
@@ -5003,7 +5061,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Python command')
+      .setName('Python Command')
       .setDesc('Leave blank to look for python3, then python. Set a full path if that fails.')
       .addText((t) =>
         t.setValue(s.pythonPath).setPlaceholder('python3').onChange(async (v) => {
@@ -5014,7 +5072,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Keep a copy before transforming')
+      .setName('Keep a Copy before Transforming')
       .setDesc('Writes the untouched note into the backup folder first. Off means the transform is final.')
       .addToggle((t) =>
         t.setValue(s.backupBeforeTransform).onChange(async (v) => {
@@ -5024,7 +5082,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Backup folder')
+      .setName('Backup Folder')
       .addText((t) =>
         t.setValue(s.backupFolder).onChange(async (v) => {
           s.backupFolder = v.trim() || '_raw';
@@ -5044,7 +5102,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       });
 
       s.transformRules.forEach((rule, i) => {
-        const row = new Setting(rulesBox).setName(`Rule ${i + 1}`);
+        const row = new Setting(rulesBox).setName(`Rule ${i + 1}`).setDesc('Name, URL pattern, script');
         row.addText((t) =>
           t
             .setPlaceholder('Name')
@@ -5072,6 +5130,12 @@ class ClipArchiverSettingTab extends PluginSettingTab {
               await this.save();
             })
         );
+        // The grey hints go once a box is filled, so each box keeps its name as a tooltip.
+        const labels = ['Rule name', 'URL pattern', 'Script in the transformers folder'];
+        row.controlEl.querySelectorAll('input').forEach((el, k) => {
+          el.title = labels[k];
+          el.setAttribute('aria-label', labels[k]);
+        });
         row.addExtraButton((b) =>
           b
             .setIcon('trash')
@@ -5085,7 +5149,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       });
 
       new Setting(rulesBox).addButton((b) =>
-        b.setButtonText('Add rule').onClick(async () => {
+        b.setButtonText('Add Rule').onClick(async () => {
           s.transformRules.push({ name: 'New site', pattern: '', script: '' });
           await this.save();
           renderRules();
@@ -5095,10 +5159,10 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     renderRules();
 
     /* ---- media ---- */
-    new Setting(containerEl).setName('Video and audio').setHeading();
+    new Setting(containerEl).setName('Video and Audio').setHeading();
 
     new Setting(containerEl)
-      .setName('Download media with yt-dlp')
+      .setName('Download Media with yt-dlp')
       .addToggle((t) =>
         t.setValue(s.downloadVideo).onChange(async (v) => {
           s.downloadVideo = v;
@@ -5107,7 +5171,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Mark the note as downloaded')
+      .setName('Mark the Note as Downloaded')
       .setDesc(
         'A property set to true alongside media, once the files are on disk — so it never claims a download that failed. ' +
           'Leave this empty to write nothing.'
@@ -5123,7 +5187,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Property order')
+      .setName('Property Order')
       .setDesc(
         'Comma-separated. Decides where a property this plugin adds (media, dl-ed) goes: after the nearest listed property ' +
           'the note already has. Properties already on the note are never moved. The default matches ARCH YT Playlists, so ' +
@@ -5140,14 +5204,14 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Media location')
+      .setName('Media Location')
       .setDesc('Where downloaded video and audio are saved. Applies in every folder the plugin watches, not just the image folders.')
       .addDropdown((d) =>
         d
-          .addOption('vault', 'Vault folder')
-          .addOption('same', 'Same folder as the note')
-          .addOption('subfolder', 'In subfolder under the note')
-          .addOption('specified', 'In the folder specified below')
+          .addOption('vault', 'Vault Folder')
+          .addOption('same', 'Same Folder as the Note')
+          .addOption('subfolder', 'In Subfolder under the Note')
+          .addOption('specified', 'In the Folder Specified Below')
           .setValue(s.videoLocationMode || 'specified')
           .onChange(async (v) => {
             s.videoLocationMode = v;
@@ -5158,7 +5222,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     if (s.videoLocationMode === 'subfolder') {
       new Setting(containerEl)
-        .setName('Media subfolder name')
+        .setName('Media Subfolder Name')
         .setDesc('Created inside the note\'s own folder. Supports {{notename}} and {{date}}.')
         .addText((t) =>
           t.setValue(s.videoSubfolder).onChange(async (v) => {
@@ -5170,7 +5234,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     if ((s.videoLocationMode || 'specified') === 'specified') {
       new Setting(containerEl)
-        .setName('Media folder')
+        .setName('Media Folder')
         .setDesc('Absolute path, or vault-relative. Required before anything will download.')
         .addText((t) =>
           t.setValue(s.videoFolder).onChange(async (v) => {
@@ -5181,7 +5245,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName('Videos outside the vault')
+      .setName('Videos Outside the Vault')
       .setDesc(
         'An absolute folder on another drive, e.g. /Volumes/4T-HDD/Media. When set, a downloaded video goes there instead, ' +
           'under this vault\'s name and the same folders it would have had in the vault; subtitles and audio stay in the vault. ' +
@@ -5199,9 +5263,9 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Keep videos in the vault in these folders')
+      .setName('Keep Videos in the Vault in These Folders')
       .setDesc(
-        'Vault folders, one per line, whose videos stay in the vault even when Videos outside the vault is set: ' +
+        'Vault folders, one per line, whose videos stay in the vault even when Videos Outside the Vault is set: ' +
           'the sensitive ones, like Temp Videos. Their default in the download popup and for the commands is the vault. ' +
           'ARCH YT Playlists has the same setting; keep the two the same.'
       )
@@ -5216,7 +5280,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Move videos to the drive when it is back')
+      .setName('Move Videos to the Drive When It Is Back')
       .setDesc(
         'A video saved in the vault only because the drive was not plugged in waits in a queue, and moves to the drive ' +
           'within a minute of it being plugged in. A video you chose to keep in the vault never moves. ' +
@@ -5233,7 +5297,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       const here = this.plugin.computer;
       const cur = s.automaticOn || here;
       new Setting(containerEl)
-        .setName('Automatic work runs on')
+        .setName('Automatic Work Runs On')
         .setDesc(
           'The one computer that processes new notes, catches up clips at startup and moves waiting videos to the drive. ' +
             'The vaults are mirrored between computers, so a note clipped on one arrives on the other as new; with Obsidian open ' +
@@ -5241,9 +5305,9 @@ class ClipArchiverSettingTab extends PluginSettingTab {
             `This computer is ${here}.`
         )
         .addDropdown((d) => {
-          d.addOption(here, `${here} (this computer)`);
+          d.addOption(here, `${here} (This Computer)`);
           if (cur !== here && cur !== '*') d.addOption(cur, cur);
-          d.addOption('*', 'Every computer');
+          d.addOption('*', 'Every Computer');
           d.setValue(cur).onChange(async (v) => {
             s.automaticOn = v;
             await this.save();
@@ -5252,10 +5316,10 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName('Relink script')
+      .setName('Relink Script')
       .setDesc(
         'relink-videos.py, which makes notes\' file:/// links follow a video moved or renamed on the drive. ' +
-          'Run it with the command "Relink videos on the outside drive". Filled in when found in ~/Documents/backup-strategy.'
+          'Run it with the command "Relink Videos on the Outside Drive". Filled in when found in ~/Documents/backup-strategy.'
       )
       .addText((t) =>
         t
@@ -5268,7 +5332,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Ask what to download')
+      .setName('Ask What to Download')
       .setDesc('Shows the video / audio choice for each clip. Turn off to use the default below silently.')
       .addToggle((t) =>
         t.setValue(s.askDownloadMode).onChange(async (v) => {
@@ -5278,7 +5342,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Default choice')
+      .setName('Default Choice')
       .addDropdown((d) =>
         d
           .addOption('video_and_audio', 'Video + Audio')
@@ -5293,7 +5357,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Media sites')
+      .setName('Media Sites')
       .setDesc('Comma-separated. Only these addresses are handed to yt-dlp, so ordinary articles cost nothing.')
       .addTextArea((t) => {
         t.inputEl.rows = 3;
@@ -5305,7 +5369,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName('Try every address')
+      .setName('Try Every Address')
       .setDesc('Asks yt-dlp about any clipped page, not just the sites above. Slower, catches more.')
       .addToggle((t) =>
         t.setValue(s.probeUnknownUrls).onChange(async (v) => {
@@ -5315,7 +5379,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('yt-dlp path')
+      .setName('yt-dlp Path')
       .addText((t) =>
         t.setValue(s.ytDlpPath).onChange(async (v) => {
           s.ytDlpPath = v.trim() || 'yt-dlp';
@@ -5324,7 +5388,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('ffmpeg folder')
+      .setName('ffmpeg Folder')
       .setDesc('The folder holding the ffmpeg binary. Needed to merge video with audio.')
       .addText((t) =>
         t.setValue(s.ffmpegLocation).onChange(async (v) => {
@@ -5344,12 +5408,12 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Where the title comes from')
-      .setDesc('Keep the note name means an edit you made by hand survives and only the channel is added. Use the video title always takes YouTube\u2019s wording.')
+      .setName('Where the Title Comes From')
+      .setDesc('Keep the Note Name means an edit you made by hand survives and only the channel is added. Use the Video Title always takes YouTube\u2019s wording.')
       .addDropdown((d) =>
         d
-          .addOption('filename', 'Keep the note name')
-          .addOption('metadata', 'Use the video title')
+          .addOption('filename', 'Keep the Note Name')
+          .addOption('metadata', 'Use the Video Title')
           .setValue(s.noteTitleSource)
           .onChange(async (v) => {
             s.noteTitleSource = v;
@@ -5358,7 +5422,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Note name template')
+      .setName('Note Name Template')
       .setDesc('yt-dlp print template used when renaming, e.g. %(channel)s \u2014 %(title)s')
       .addText((t) =>
         t.setValue(s.noteNameTemplate).onChange(async (v) => {
@@ -5368,7 +5432,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Audio format')
+      .setName('Audio Format')
       .addDropdown((d) =>
         d
           .addOption('mp3', 'mp3')
@@ -5384,7 +5448,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Skip playlists')
+      .setName('Skip Playlists')
       .setDesc('A YouTube address carrying a list parameter downloads one video, not the whole list.')
       .addToggle((t) =>
         t.setValue(s.noPlaylist).onChange(async (v) => {
@@ -5394,7 +5458,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Remote components')
+      .setName('Remote Components')
       .setDesc(
         'Lets yt-dlp fetch YouTube\u2019s challenge solver script at run time. Required for most ' +
           'YouTube downloads: without it, signature solving fails and the download stops with ' +
@@ -5408,7 +5472,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Cookies from browser')
+      .setName('Cookies from Browser')
       .setDesc('chrome, safari, firefox, edge or brave. Ignored when a cookies file is set below.')
       .addText((t) =>
         t.setValue(s.cookiesFromBrowser).onChange(async (v) => {
@@ -5418,7 +5482,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Cookies file')
+      .setName('Cookies File')
       .setDesc('Path to an exported cookies.txt. Avoids repeated keychain prompts, but goes stale after a few weeks.')
       .addText((t) =>
         t.setValue(s.cookiesFile).onChange(async (v) => {
@@ -5428,7 +5492,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('JavaScript runtime')
+      .setName('JavaScript Runtime')
       .setDesc('Needed for YouTube. A bare name relies on PATH; a name and full path does not, e.g. node:/usr/local/bin/node')
       .addText((t) =>
         t.setValue(s.jsRuntime).setPlaceholder('auto').onChange(async (v) => {
@@ -5438,7 +5502,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Retry arguments')
+      .setName('Retry Arguments')
       .setDesc('Added on a second attempt when the first one hits a 403. Blank disables the retry.')
       .addText((t) =>
         t.setValue(s.fallbackExtractorArgs).onChange(async (v) => {
@@ -5448,7 +5512,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Extra yt-dlp arguments')
+      .setName('Extra yt-dlp Arguments')
       .setDesc('Added to every call. Example: --embed-metadata --embed-thumbnail --write-subs')
       .addText((t) =>
         t.setValue(s.ytDlpExtraArgs).onChange(async (v) => {
@@ -5458,7 +5522,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Rename the note')
+      .setName('Rename the Note')
       .setDesc('Renames to "Channel \u2014 Title" whether or not you download anything. Links to the note are updated, and the attachment folder picks up the new name too.')
       .addToggle((t) =>
         t.setValue(s.renameNoteFromMedia).onChange(async (v) => {
@@ -5468,7 +5532,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Fill the video length')
+      .setName('Fill the Video Length')
       .setDesc('Writes the length into "duration", in whole minutes rounded up, the way ARCH YT Playlists does. Only when the note has no duration yet; a value already there is kept. On YouTube it reads the video page, about a second.')
       .addToggle((t) =>
         t.setValue(s.fillVideoLength).onChange(async (v) => {
@@ -5478,7 +5542,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Embed the downloaded file')
+      .setName('Embed the Downloaded File')
       .setDesc('Adds a plain ![[file]] embed after downloading and removes the remote video embed. Nothing plugin-specific is written, so the note still works without this plugin.')
       .addToggle((t) =>
         t.setValue(s.embedLocalMedia).onChange(async (v) => {
@@ -5488,7 +5552,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Link saved media in the note')
+      .setName('Link Saved Media in the Note')
       .setDesc('Adds a media property pointing at the downloaded file.')
       .addToggle((t) =>
         t.setValue(s.linkDownloadedMedia).onChange(async (v) => {
@@ -5499,7 +5563,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
 
     new Setting(containerEl)
-      .setName('Save subtitles with single downloads')
+      .setName('Save Subtitles with Single Downloads')
       .setDesc('Writes a subtitle file alongside the downloaded video.')
       .addToggle((t) =>
         t.setValue(s.downloadSubtitles).onChange(async (v) => {
@@ -5509,7 +5573,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Subtitle languages')
+      .setName('Subtitle Languages')
       .setDesc('Comma-separated yt-dlp language codes. "en.*" covers English including auto-generated; "en.*,vi.*" adds Vietnamese. Use "all" for every language offered.')
       .addText((t) =>
         t.setValue(s.subtitleLangs).onChange(async (v) => {
@@ -5519,7 +5583,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Keep only one subtitle file')
+      .setName('Keep Only One Subtitle File')
       .setDesc(
         'A language pattern like "en.*" matches en, en-US, en-GB and en-orig, so yt-dlp writes a separate file for each. ' +
           'This keeps the closest match to the language you asked for and deletes the rest, considering only files named after the video itself. ' +
@@ -5535,11 +5599,11 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Troubleshooting').setHeading();
 
     new Setting(containerEl)
-      .setName('Set up external tools')
+      .setName('Set Up External Tools')
       .setDesc('Finds yt-dlp, ffmpeg, Python and a JavaScript runtime, fills in the paths, and offers to install what is missing.')
       .addButton((b) =>
         b
-          .setButtonText('Open setup')
+          .setButtonText('Open Setup')
           .setCta()
           .onClick(() => this.plugin.diagnose(() => this.display()))
       );
@@ -5547,7 +5611,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Update yt-dlp')
       .setDesc('Works on standalone builds. A pip or Homebrew install has to be updated the same way it was installed.')
-      .addButton((b) => b.setButtonText('Update now').onClick(() => this.plugin.updateYtDlp()));
+      .addButton((b) => b.setButtonText('Update Now').onClick(() => this.plugin.updateYtDlp()));
 
   }
 }

@@ -24,7 +24,7 @@ Desktop only. The plugin spawns external programs, which Obsidian mobile cannot 
 | **Python 3** | the body transformers | only if you use them |
 | **A JavaScript runtime** | YouTube's challenge solver | Node or Deno, given as a full path |
 
-Run **Diagnose** from the command palette after installing. It reports what it found and what is missing, which is faster than guessing.
+Run **Set Up External Tools** from the command palette after installing. It reports what it found and what is missing, which is faster than guessing.
 
 ## Install
 
@@ -55,11 +55,11 @@ Steps 4 and 6 have separate scopes, which is what the folder settings below are 
 
 ## Settings worth knowing about
 
-**Images have their own folder list, separate from media.** *Download images only in these folders* scopes the image pass alone — video still downloads anywhere the plugin runs. Empty means everywhere.
+**Images have their own folder list, separate from media.** *Download Images Only in These Folders* scopes the image pass alone — video still downloads anywhere the plugin runs. Empty means everywhere.
 
 **Save locations** offer the same choices as Obsidian's own attachment setting: vault folder, same folder as the note, a subfolder under it, or a path you name. Images get a fifth, *follow Obsidian's attachment setting*. Out of the box both use *in subfolder under the note*: media lands in a `Medias` folder beside the note and images in an `Images` folder, so a note in `Clips/YouTube` gets `Clips/YouTube/Medias` and `Clips/YouTube/Images`. This plugin clips any site, so the folders follow the note rather than naming one source.
 
-**Only one subtitle file is kept.** A language pattern like `en.*` matches `en`, `en-US`, `en-GB` and `en-orig`, so yt-dlp writes a separate file for each and you end up with four tracks for one video. *Keep only one subtitle file* keeps the closest match to what you asked for — a plain code beats the original-language track, which beats a regional variant — and deletes the rest. Only files named after the video itself are considered, so a subtitle you put in the folder by hand is never touched.
+**Only one subtitle file is kept.** A language pattern like `en.*` matches `en`, `en-US`, `en-GB` and `en-orig`, so yt-dlp writes a separate file for each and you end up with four tracks for one video. *Keep Only One Subtitle File* keeps the closest match to what you asked for — a plain code beats the original-language track, which beats a regional variant — and deletes the rest. Only files named after the video itself are considered, so a subtitle you put in the folder by hand is never touched.
 
 **Media hosts accept regular expressions.** This is the least obvious setting and the most worth understanding. A bare domain like `x.com` matches *every* URL on that domain, including profile pages with no video on them — and each one costs a full `yt-dlp` round trip, several seconds, to discover there is nothing there. Wrap an entry in slashes and it compiles as a regex instead:
 
@@ -69,7 +69,7 @@ Steps 4 and 6 have separate scopes, which is what the folder settings below are 
 
 That matches real posts and ignores profiles. The defaults already do this for Twitter/X and Instagram. If a site feels slow to clip, look in the console for `metadata done` followed by `no downloadable media` — that pairing means the host pattern is too broad.
 
-**The note can be flagged once media arrives.** *Mark the note as downloaded* names a property — `dl-ed` by default — set to `true` in the same write that adds `media`, and only after the files are on disk, so it never claims a download that failed. A note that already has the property keeps its position; a note without it gets it as its first property, since a status flag buried at the bottom of the block is easy to miss. Leave the setting empty to write nothing.
+**The note can be flagged once media arrives.** *Mark the Note as Downloaded* names a property — `dl-ed` by default — set to `true` in the same write that adds `media`, and only after the files are on disk, so it never claims a download that failed. A note that already has the property keeps its position; a note without it gets it as its first property, since a status flag buried at the bottom of the block is easy to miss. Leave the setting empty to write nothing.
 
 **Image properties become `[[file.jpg]]`**, a plain wikilink, on `img`, `image`, `cover`, `thumbnail`, `banner` and `icon` by default. Any label the property carried is dropped rather than moved, because this plugin clips arbitrary sites and no single label fits them all.
 
@@ -82,7 +82,7 @@ Two ship with the plugin:
 - **`gemini_chat.py`** turns a Gemini conversation into numbered prompt/answer callouts.
 - **`reddit_thread.py`** turns a thread into nested comment callouts. *This one has never been run against a real clip.*
 
-Both are embedded in `main.js` and written into `transformers/` when the plugin loads, since a release only delivers `main.js` and `manifest.json`. A file already sitting there is never overwritten, so edits you make to them survive an update — run **Restore the bundled transformer scripts** if you want the shipped versions back. Your own scripts in that folder are left alone regardless.
+Both are embedded in `main.js` and written into `transformers/` when the plugin loads, since a release only delivers `main.js` and `manifest.json`. A file already sitting there is never overwritten, so edits you make to them survive an update — run **Restore the Bundled Transformer Scripts** if you want the shipped versions back. Your own scripts in that folder are left alone regardless.
 
 Add your own by dropping a `.py` file into `transformers/` and adding a rule that matches a URL pattern.
 
@@ -90,22 +90,23 @@ Add your own by dropping a `.py` file into `transformers/` and adding a rule tha
 
 | command | what it does |
 | --- | --- |
-| Archive this clip | the whole pipeline, ignoring the already-processed record |
-| Download images for this note | images only, ignoring the folder list |
-| Run the transformer on this note | body rewrite only |
-| Download video and audio for this note | media only: the video, with the mp3 taken from it |
-| Download video for this note | media only: the video |
-| Download audio for this note | media only: the mp3 |
-| Download subtitles for this note | the subtitle files only, beside where the video would go |
-| Fill video length for this note | writes `duration` in whole minutes, for a note clipped before 1.12.0 or with the setting off |
-| Embed the downloaded media in this note | inserts the `![[file]]` embed |
-| Forget this note | clears it from the processed record so it can be archived again |
-| Restore the bundled transformer scripts | rewrites `gemini_chat.py` and `reddit_thread.py` from the copies inside `main.js` |
-| Diagnose | reports tool paths, runtimes, and what the plugin sees in the current note |
+| Archive This Clip | the whole pipeline, ignoring the already-processed record |
+| Download Images for This Note | images only, ignoring the folder list |
+| Transform This Note with Its Site Script | body rewrite only |
+| Download Video and Audio for This Note | media only: the video, with the mp3 taken from it |
+| Download Video for This Note | media only: the video |
+| Download Audio for This Note | media only: the mp3 |
+| Download Subtitles for This Note | the subtitle files only, beside where the video would go |
+| Fill Video Length for This Note | writes `duration` in whole minutes, for a note clipped before 1.12.0 or with the setting off |
+| Embed the Downloaded Media in This Note | inserts the `![[file]]` embed |
+| Forget This Note, So It Can Be Archived Again | clears it from the processed record so it can be archived again |
+| Restore the Bundled Transformer Scripts | asks first, then rewrites `gemini_chat.py` and `reddit_thread.py` from the copies inside `main.js` |
+| Set Up External Tools (yt-dlp, ffmpeg, Python) | reports tool paths and versions, fills in the settings, installs what is missing |
+| Inspect This Note (What After Clipping Sees) | what the plugin sees in the current note |
 
 ## Things that will surprise you
 
-**A page is only auto-processed once.** The record is keyed on the URL, not the note path, so re-clipping the same page — anywhere, under any name — skips the download. That is deliberate: it stops large files being fetched twice. Images and the transformer still re-run. A note whose `dl-ed` property is already `true` is skipped the same way, so the one property both records the download and prevents a repeat. **Forget this note** clears both.
+**A page is only auto-processed once.** The record is keyed on the URL, not the note path, so re-clipping the same page — anywhere, under any name — skips the download. That is deliberate: it stops large files being fetched twice. Images and the transformer still re-run. A note whose `dl-ed` property is already `true` is skipped the same way, so the one property both records the download and prevents a repeat. **Forget This Note** clears both.
 
 **Notes carrying a `yt-playlist` property are left alone**, because they belong to ARCH YT Playlists. Without this the two plugins fight over the same notes.
 

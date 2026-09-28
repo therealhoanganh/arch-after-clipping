@@ -57,11 +57,13 @@ function automaticRunsHere(settings, here) {
  * Videos outside the vault
  * ------------------------------------------------------------------ */
 
-// The drive a folder outside the vault lives on. On macOS that is
-// /Volumes/<name>; elsewhere the path's root.
+// The drive a folder outside the vault lives on: /Volumes/<name>, on the Mac
+// and on the PC through its link; elsewhere the path's root.
 function driveOf(p) {
   const parts = String(p).split(path.sep);
-  if (process.platform === 'darwin' && parts[1] === 'Volumes' && parts[2]) {
+  // Any platform: the PC reaches the drive through the same /Volumes/<name>
+  // link (Backup Strategy, Part 2), so its name must come out the same there.
+  if (parts[1] === 'Volumes' && parts[2]) {
     return path.join('/', 'Volumes', parts[2]);
   }
   return path.parse(String(p)).root;
@@ -320,10 +322,10 @@ function joinLabels(labels) {
 // the spoken one, and the transcript is taken in the spoken language whenever
 // that is the main or an extra language.
 //
-// Known weakness: a hand-made Vietnamese track on an English video is named
-// "vi" like the auto-translation and is dropped with it. Telling them apart
-// needs the video's JSON (`subtitles` against `automatic_captions`), which the
-// download path does not have.
+// Known weakness: only the speech-recognition track of an extra language is
+// fetched, so a hand-made Vietnamese track is never used, on a Vietnamese video
+// or any other. Asking for it means asking for plain "vi", which on most videos
+// is a machine translation that YouTube throttles (see subLangsArg).
 
 function baseLang(settings) {
   return String((settings && settings.subtitleLangs) || 'en').replace(/[.*].*$/, '').toLowerCase() || 'en';
@@ -336,12 +338,14 @@ function extraLangs(settings) {
     .filter(Boolean);
 }
 
-// The --sub-langs value: the main pattern, plus each extra language and its
-// "-orig" track. Only the plain code is asked for, not "vi.*", so regional
-// variants of a translation are not fetched as well.
+// The --sub-langs value: the main pattern, plus the "-orig" track of each
+// extra language. Only "-orig" is asked for: YouTube writes it only for the
+// spoken language, so no translation is ever requested. Asking for plain "vi"
+// made YouTube machine-translate every English video, and it throttles those:
+// the first download on the PC (2026-09-28) failed on "HTTP Error 429" for 'vi'.
 function subLangsArg(settings) {
   const main = (settings && settings.subtitleLangs) || 'en.*';
-  const extra = extraLangs(settings).flatMap((l) => [l, `${l}-orig`]);
+  const extra = extraLangs(settings).map((l) => `${l}-orig`);
   return [main, ...extra].join(',');
 }
 
@@ -2739,6 +2743,9 @@ module.exports = class ClipArchiver extends Plugin {
       const args = ['-f', this.settings.quality, '-o', out];
       if (this.settings.downloadSubtitles) {
         args.push(
+          // A subtitle YouTube refuses (HTTP 429) is then a warning, not a
+          // failed video; a video that fails still exits non-zero.
+          '--ignore-errors',
           '--write-auto-subs', '--write-subs',
           '--sub-langs', subLangsArg(this.settings),
           '--sub-format', 'vtt/best'
@@ -2795,7 +2802,7 @@ module.exports = class ClipArchiver extends Plugin {
       }
       const out = path.join(folder, this.mediaOutputTemplate(file));
       const args = [
-        '--skip-download', '--write-auto-subs', '--write-subs',
+        '--skip-download', '--ignore-errors', '--write-auto-subs', '--write-subs',
         '--sub-langs', subLangsArg(this.settings),
         '--sub-format', 'vtt/best',
         '-o', out,

@@ -6,7 +6,11 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.19.0 — current
+## 1.19.1 — current
+
+The same fixes as ARCH YT Playlists 1.9.2, found on the PC on 2026-09-28: the extra subtitle language is fetched as its `-orig` track only (plain `vi` asked YouTube for a machine translation, which it refused with HTTP 429 and failed the download); `--ignore-errors` on the calls that fetch subtitles, so a refused track is a warning; and `driveOf` reads `/Volumes/<name>` on any platform, so the PC's drive links are labelled "4T-HDD: …" rather than ": …".
+
+## 1.19.0
 
 **Vietnamese subtitles, when the video is in Vietnamese**, the same change as ARCH YT Playlists 1.9.0, at his request of 2026-09-28: *"can you make this into default setting too? Like download vietnamese subtitle if there is one."* A new setting, *Also Keep Subtitles In*, default `vi`, adds `vi,vi-orig` to `--sub-langs`, and *Keep Only the Best Subtitles* (renamed from *Keep Only One Subtitle File*) keeps the Vietnamese track only when the video is spoken in Vietnamese, which YouTube marks with a `vi-orig` track; the machine translation it offers on English videos is deleted with the other extras. The choice (`subLangsArg`, `pickSubtitles` and helpers) is copied word for word from YT Playlists' `lib/subtitles.js`; change the two together. The *Subtitle Languages* description no longer suggests `en.*,vi.*`, which fetched those machine translations.
 

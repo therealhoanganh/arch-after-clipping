@@ -232,6 +232,10 @@ changing it:
   YouTube enforces Trusted Types, which blocks Defuddle in the page's own world and in a
   DevTools-made isolated world, but not in the extension's content-script world: test
   it through the extension, never by injecting it over the DevTools protocol.
+- **The note is opened through this plugin's handler, `obsidian://arch-youtube-note`
+  (1.22.0), never `obsidian://open` with a file name**: this plugin renames a new clip
+  the moment its vault opens, so the name the helper wrote is gone by then. Renaming the
+  handler breaks opening in every vault without a word.
 - **Test it end to end without touching his Chrome**: start Chrome headless with a throwaway
   `--user-data-dir`, `--remote-debugging-pipe` and `--enable-unsafe-extension-debugging`,
   copy the host manifest into `<user-data-dir>/NativeMessagingHosts/`, load the extension

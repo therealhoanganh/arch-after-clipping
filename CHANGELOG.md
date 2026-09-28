@@ -6,7 +6,15 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.21.0 — current
+## 1.22.0 — current
+
+**The note opens in Obsidian, and the vault with it.** His words after using 1.21.0: *"Ok so the plugin did work but it not auto open vault and auto open not even when vault is open."* The helper wrote the file and nothing more, so a closed vault stayed closed and After Clipping never finished the clip there.
+
+- After saving, the helper opens the note through `obsidian://arch-youtube-note?vault=…&video=…&file=…`, which starts Obsidian and the vault when closed, as Web Clipper does. **Not `obsidian://open` with the file name**: the first test opened TESTFIELD but not the note, because this plugin renamed the new clip ("Blender — Open Test Note") the moment the vault opened, before Obsidian looked for the old name. The link goes to this plugin's handler (`openYouTubeNote`), which finds the note by the video id, waits up to ten seconds for a new file to be indexed, and switches to its tab when it is already open.
+- **When**: by default only when a note is created, so a Cmd + K does not pull Obsidian up each time; the extension's options page offers *After Every Note* and *Never*. **Chrome stays in front** by default (macOS `open -g`), so the video is not interrupted; *Bring Obsidian to the Front* changes that. A vault Obsidian has to open still comes forward on its own.
+- Tested with the helper called as Chrome calls it: TESTFIELD open, an existing renamed note opened with VS Code left in front; TESTFIELD closed, a new note created, renamed by this plugin on opening, and opened. Test notes deleted, his helper memory restored.
+
+## 1.21.0
 
 **A new video note is clipped with his Web Clipper template.** His words after using 1.20.0: *"Ok so the command work, but I think it should use the Web Clipper template too, like take note also mean to clip the video as well. I export the clipping template in Downloads."* The export, his *YouTube Video* template (`channel`, `banner`, `url`, `dl-ed`, `v-rank`, `duration`, `status: Watch Later`, `published`, `tags: yt-video`; body `{{content}}`; name `{{title}}`; folder `YouTube`), ships as the extension's `template.json`.
 

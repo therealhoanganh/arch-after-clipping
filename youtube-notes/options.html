@@ -9,6 +9,7 @@
   h2 { font-size: 15px; margin: 18px 0 8px; }
   .row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
   .row span { flex: 1; }
+  select { font: inherit; padding: 4px 6px; }
   button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid #888; background: transparent; cursor: pointer; min-width: 150px; }
   button.recording { border-color: #1a73e8; color: #1a73e8; }
   .muted { color: #666; font-size: 13px; }
@@ -22,6 +23,12 @@
   <div class="row"><span>Save the Moment</span><button id="bare"></button></div>
   <div class="row"><span>Save the Moment With a Line</span><button id="typed"></button></div>
   <div class="row"><span class="muted">Click a hotkey, then press the new keys. They work on YouTube pages only.</span><button id="reset">Restore Defaults</button></div>
+
+  <h2>Obsidian</h2>
+  <div class="row"><span>Open the Note in Obsidian</span>
+    <select id="open-when"><option value="created">When a Note Is Created</option><option value="always">After Every Note</option><option value="never">Never</option></select></div>
+  <div class="row"><span>Bring Obsidian to the Front</span><input id="open-front" type="checkbox"></div>
+  <div class="row"><span class="muted">Opening starts Obsidian and the vault when they are closed, as Web Clipper does, so After Clipping can finish a new clip. Left off, Chrome stays in front and the video is not interrupted.</span></div>
 
   <h2>Web Clipper Template</h2>
   <div class="row"><span id="tpl-now" class="muted"></span></div>

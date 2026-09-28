@@ -233,7 +233,34 @@ def add(msg, state):
         f.write(insert_line(body, vid, sec, line))
     state['notes'][vid] = {'vault': vault, 'path': rel}
     state['last'] = vault
-    return {'ok': True, 'vault': vault, 'note': os.path.splitext(os.path.basename(rel))[0], 'created': made, 'label': label(sec)}
+    when = msg.get('open') or 'created'  # created | always | never
+    opened = when == 'always' or (when == 'created' and made)
+    if opened:
+        open_in_obsidian(vault, rel, vid, bool(msg.get('front')))
+    return {'ok': True, 'vault': vault, 'note': os.path.splitext(os.path.basename(rel))[0], 'created': made,
+            'label': label(sec), 'opened': opened}
+
+
+def open_in_obsidian(vault, rel, vid, front):
+    """Opens the note in Obsidian, starting Obsidian and the vault when they are
+    closed, as Web Clipper does. Not obsidian://open with the file name: After
+    Clipping renames a new clip ("Channel — Title") the moment the vault opens,
+    so the name is gone before Obsidian looks for it (seen 2026-09-28). The link
+    goes to After Clipping's own handler, which finds the note by the video.
+    Runs a second after this helper has answered, so Obsidian has seen the file.
+    With front off, macOS keeps Chrome in front (open -g), except that a vault
+    Obsidian has to open still comes forward."""
+    import subprocess
+    from urllib.parse import quote
+    uri = 'obsidian://arch-youtube-note?vault=%s&video=%s&file=%s' % (
+        quote(vault, safe=''), quote(vid, safe=''), quote(rel, safe=''))
+    if sys.platform == 'darwin':
+        cmd = 'sleep 1; exec open %s"$0"' % ('' if front else '-g ')
+    else:
+        cmd = 'sleep 1; exec xdg-open "$0"'
+    subprocess.Popen(['/bin/sh', '-c', cmd, uri], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    return uri
 
 
 def handle(msg, state):

@@ -13,9 +13,19 @@
     typed: { code: 'KeyK', meta: IS_MAC, ctrl: false, alt: !IS_MAC, shift: true },
   };
   let keys = DEFAULT_KEYS;
+  // Whether the helper opens the note in Obsidian: when a note is created
+  // (default), after every note, or never; and whether Obsidian comes to the front.
+  const DEFAULT_OPEN = { when: 'created', front: false };
+  let openPref = DEFAULT_OPEN;
   try {
-    chrome.storage.sync.get('keys', (r) => { if (r && r.keys) keys = r.keys; });
-    chrome.storage.onChanged.addListener((c) => { if (c.keys) keys = c.keys.newValue || DEFAULT_KEYS; });
+    chrome.storage.sync.get(['keys', 'open'], (r) => {
+      if (r && r.keys) keys = r.keys;
+      if (r && r.open) openPref = r.open;
+    });
+    chrome.storage.onChanged.addListener((c) => {
+      if (c.keys) keys = c.keys.newValue || DEFAULT_KEYS;
+      if (c.open) openPref = c.open.newValue || DEFAULT_OPEN;
+    });
   } catch (e) { /* the defaults stand */ }
 
   const same = (e, k) => !!k && e.code === k.code && e.metaKey === !!k.meta && e.ctrlKey === !!k.ctrl
@@ -288,13 +298,15 @@
     return `Not saved: ${res.error}`;
   }
 
+  const opening = () => ({ open: openPref.when || 'created', front: !!openPref.front });
+
   async function save(info, lookup) {
     let res;
     const found = lookup ? await lookup : null;
     if (found && found.error) res = found;
-    else if (found && found.found) res = await send(Object.assign({ type: 'add', vault: found.vault, path: found.path }, info));
+    else if (found && found.found) res = await send(Object.assign({ type: 'add', vault: found.vault, path: found.path }, opening(), info));
     else if (found) res = { need: 'place', vaults: found.vaults, last: found.last, folders: found.folders };
-    else res = await send(Object.assign({ type: 'add' }, info));
+    else res = await send(Object.assign({ type: 'add' }, opening(), info));
     let clipped = null, clipError = '';
     if (res.need === 'place') {
       const t = await send({ type: 'template' });
@@ -307,13 +319,13 @@
       } catch (e) {
         clipError = e.message || String(e);
       }
-      res = await send(Object.assign({ type: 'add', create: true }, info, place,
+      res = await send(Object.assign({ type: 'add', create: true }, opening(), info, place,
         clipped ? { markdown: clipped.markdown, name: clipped.name } : {}));
     }
     if (res.error) return toast(problem(res), 10000, true);
     const where = `${res.note} (${res.vault})`;
     if (clipError) return toast(`Saved ${res.label} in a new note, but without the clip: ${clipError}. ${where}`, 10000, true);
-    toast(`Saved ${res.label}${res.created ? (clipped ? ', clipped into a new note' : ' in a new note') : ''} · ${where}`);
+    toast(`Saved ${res.label}${res.created ? (clipped ? ', clipped into a new note' : ' in a new note') : ''} · ${where}${res.opened ? ' · opening it in Obsidian' : ''}`);
   }
 
   let busy = false;

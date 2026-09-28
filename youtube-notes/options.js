@@ -113,3 +113,19 @@ document.getElementById('tpl-reset').onclick = async () => {
   showTemplate();
 };
 showTemplate();
+
+
+/* ---- opening the note in Obsidian ---- */
+
+const DEFAULT_OPEN = { when: 'created', front: false };
+chrome.storage.sync.get('open', (r) => {
+  const o = (r && r.open) || DEFAULT_OPEN;
+  document.getElementById('open-when').value = o.when || 'created';
+  document.getElementById('open-front').checked = !!o.front;
+});
+const saveOpen = () => chrome.storage.sync.set({ open: {
+  when: document.getElementById('open-when').value,
+  front: document.getElementById('open-front').checked,
+} });
+document.getElementById('open-when').onchange = saveOpen;
+document.getElementById('open-front').onchange = saveOpen;

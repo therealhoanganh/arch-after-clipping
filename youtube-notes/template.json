@@ -1,0 +1,58 @@
+{
+	"schemaVersion": "0.1.0",
+	"name": "YouTube Video",
+	"behavior": "create",
+	"noteContentFormat": "{{content}}",
+	"properties": [
+		{
+			"name": "channel",
+			"value": "[[{{author}}]]",
+			"type": "text"
+		},
+		{
+			"name": "banner",
+			"value": "[Thumbnail]({{image}})",
+			"type": "text"
+		},
+		{
+			"name": "url",
+			"value": "[Link]({{meta:property:og:url}})",
+			"type": "text"
+		},
+		{
+			"name": "dl-ed",
+			"value": "false",
+			"type": "checkbox"
+		},
+		{
+			"name": "v-rank",
+			"value": "0",
+			"type": "number"
+		},
+		{
+			"name": "duration",
+			"value": "",
+			"type": "number"
+		},
+		{
+			"name": "status",
+			"value": "Watch Later",
+			"type": "text"
+		},
+		{
+			"name": "published",
+			"value": "{{published|date:\\\"YYYY-MM-DD\\\"}}",
+			"type": "date"
+		},
+		{
+			"name": "tags",
+			"value": "yt-video",
+			"type": "multitext"
+		}
+	],
+	"triggers": [
+		"/^https:\\/\\/((www\\.|m\\.)?youtube\\.com\\/(watch\\?|shorts\\/|live\\/|embed\\/)|youtu\\.be\\/)/"
+	],
+	"noteNameFormat": "{{title}}",
+	"path": "YouTube"
+}

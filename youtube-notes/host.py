@@ -187,7 +187,9 @@ def safe_name(title, vid):
     return name or ('YouTube ' + vid)
 
 
-def create_note(root, folder, vid, title, url):
+def create_note(root, folder, vid, title, url, markdown=None):
+    """The note the extension clipped with his Web Clipper template, or, when
+    that failed, a plain one that still carries the url."""
     folder = (folder or '').strip().strip('/')
     d = os.path.join(root, folder) if folder else root
     os.makedirs(d, exist_ok=True)
@@ -195,9 +197,10 @@ def create_note(root, folder, vid, title, url):
     p = os.path.join(d, name + '.md')
     if os.path.exists(p):
         p = os.path.join(d, '%s (%s).md' % (name, vid))
-    created = time.strftime('%Y-%m-%dT%H:%M:%S')
+    if not markdown:
+        markdown = '---\nurl: "[Link](%s)"\ncreated: %s\n---\n' % (url, time.strftime('%Y-%m-%dT%H:%M:%S'))
     with open(p, 'w', encoding='utf-8') as f:
-        f.write('---\nurl: "[Link](%s)"\ncreated: %s\n---\n' % (url, created))
+        f.write(markdown)
     return os.path.relpath(p, root)
 
 
@@ -212,7 +215,8 @@ def add(msg, state):
         if hit:
             vault, rel = hit
         elif msg.get('create') and vault in vs:
-            rel = create_note(vs[vault], msg.get('folder'), vid, msg.get('title'), 'https://www.youtube.com/watch?v=' + vid)
+            rel = create_note(vs[vault], msg.get('folder'), vid, msg.get('name') or msg.get('title'),
+                              'https://www.youtube.com/watch?v=' + vid, msg.get('markdown'))
             made = True
             state['folders'][vault] = (msg.get('folder') or '').strip().strip('/')
         else:

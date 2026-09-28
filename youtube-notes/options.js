@@ -74,3 +74,42 @@ document.getElementById('check').onclick = () => {
 };
 
 chrome.storage.sync.get('keys', (r) => { if (r && r.keys) keys = r.keys; draw(); });
+
+/* ---- the Web Clipper template ---- */
+
+async function showTemplate() {
+  const stored = (await chrome.storage.local.get('template')).template;
+  const bundled = await (await fetch(chrome.runtime.getURL('template.json'))).json();
+  const t = stored || bundled;
+  const props = (t.properties || []).map((p) => p.name).join(', ');
+  document.getElementById('tpl-now').textContent = `In use: "${t.name}"${stored ? ', imported' : ', the one shipped with the extension'}; `
+    + `note name ${t.noteNameFormat || '{{title}}'}, folder ${t.path || '(top level)'}${t.vault ? `, vault ${t.vault}` : ''}; properties ${props || 'none'}.`;
+  document.getElementById('tpl-reset').disabled = !stored;
+}
+
+document.getElementById('tpl-import').onclick = () => document.getElementById('tpl-file').click();
+document.getElementById('tpl-file').onchange = async (e) => {
+  const out = document.getElementById('tpl-result');
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const t = JSON.parse(await f.text());
+    if (!t || !Array.isArray(t.properties) || typeof t.noteContentFormat !== 'string') {
+      throw new Error('it has no properties or note content, so it is not a Web Clipper template export');
+    }
+    await chrome.storage.local.set({ template: t });
+    out.className = 'good';
+    out.textContent = `Imported "${t.name}". New notes use it from now on.`;
+  } catch (err) {
+    out.className = 'bad';
+    out.textContent = `Not imported: ${err.message}. The template in use has not changed. Export the template from Web Clipper again and choose that .json file.`;
+  }
+  showTemplate();
+};
+document.getElementById('tpl-reset').onclick = async () => {
+  await chrome.storage.local.remove('template');
+  document.getElementById('tpl-result').textContent = '';
+  showTemplate();
+};
+showTemplate();

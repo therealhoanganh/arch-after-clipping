@@ -126,16 +126,17 @@
       <div class="row"><span class="hint">Enter saves · Esc cancels</span></div>`,
     (b) => b.querySelector('.text').value, '.text');
 
-  async function askPlace(res, info) {
+  async function askPlace(res, info, tpl) {
     const vaults = res.vaults || [];
     if (!vaults.length) {
       toast('Not saved: no Obsidian vault found on this computer. Open Obsidian once so it lists its vaults, then press again.', 8000, true);
       return null;
     }
-    const last = vaults.includes(res.last) ? res.last : vaults[0];
+    // the template's own vault first, as Web Clipper would; else the last one used
+    const last = vaults.includes(tpl.vault) ? tpl.vault : vaults.includes(res.last) ? res.last : vaults[0];
     const folders = res.folders || {};
     const answer = box(`
-        <div class="head">New note for <b>${esc(info.title || info.videoId)}</b></div>
+        <div class="head">New note for <b>${esc(info.title || info.videoId)}</b>, clipped with the <b>${esc(tpl.name || 'Web Clipper')}</b> template</div>
         <label>Which Vault</label>
         <select class="vault">${vaults.map((v) => `<option${v === last ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>
         <label>Folder For the New Note</label>
@@ -147,7 +148,8 @@
     const b = root.querySelector('.box');
     const sel = b.querySelector('.vault'), folder = b.querySelector('.folder'), list = b.querySelector('datalist');
     const fill = async () => {
-      folder.value = folders[sel.value] || '';
+      // the folder last used in this vault, else the template's (his: YouTube)
+      folder.value = folders[sel.value] != null ? folders[sel.value] : (tpl.path || '');
       list.innerHTML = '';
       const r = await send({ type: 'folders', vault: sel.value });
       list.innerHTML = (r.folders || []).map((f) => `<option value="${esc(f)}">`).join('');
@@ -155,6 +157,125 @@
     sel.onchange = fill;
     fill();
     return answer;
+  }
+
+  /* ---------------- clipping, as Web Clipper would ---------------- */
+
+  // Web Clipper cannot be asked by another extension to clip, so a new note is
+  // made here from the same template and the same library (Defuddle), which
+  // is what Web Clipper's {{content}} comes from.
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function formatDate(value, fmt) {
+    const d = value instanceof Date ? value : new Date(value);
+    if (!value || isNaN(d)) return String(value || '');
+    const dateOnly = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+    const get = (utc, local) => (dateOnly ? d[utc]() : d[local]());
+    const Y = get('getUTCFullYear', 'getFullYear'), M = get('getUTCMonth', 'getMonth') + 1, D = get('getUTCDate', 'getDate');
+    const map = {
+      YYYY: String(Y), YY: String(Y).slice(2), MMMM: MONTHS[M - 1], MMM: MONTHS[M - 1].slice(0, 3), MM: pad2(M), M: String(M),
+      DD: pad2(D), D: String(D), HH: pad2(d.getHours()), H: String(d.getHours()), mm: pad2(d.getMinutes()), ss: pad2(d.getSeconds()),
+    };
+    return fmt.replace(/YYYY|YY|MMMM|MMM|MM|M|DD|D|HH|H|mm|ss/g, (t) => map[t]);
+  }
+
+  // {{name}}, {{meta:property:og:url}}, {{name|date:"YYYY-MM-DD"}}: what his
+  // template uses. An unknown filter leaves the value as it is.
+  function render(str, vars, meta) {
+    return String(str || '').replace(/\{\{([\s\S]*?)\}\}/g, (_, expr) => {
+      const [name, ...filters] = expr.split('|').map((x) => x.trim());
+      let v;
+      const m = name.match(/^meta:(property|name):(.+)$/);
+      if (m) v = meta(m[1], m[2]);
+      else v = vars[name];
+      v = v == null ? '' : v;
+      for (const f of filters) {
+        const fm = f.match(/^date:\s*\\?["']?(.*?)\\?["']?$/);
+        if (fm) v = formatDate(v, fm[1] || 'YYYY-MM-DD');
+      }
+      return String(v);
+    });
+  }
+
+  function yamlScalar(v) {
+    if (v === '') return '';
+    return /^[\s[\]{}>|*&!%#`@,?:'"-]|: | #|\s$|^(true|false|null|yes|no|~)$/i.test(v) ? JSON.stringify(v) : v;
+  }
+  function yamlProperty(p, value) {
+    const type = p.type || 'text';
+    if (type === 'checkbox') return `${p.name}: ${/^(true|1|yes)$/i.test(value.trim()) ? 'true' : 'false'}`;
+    if (type === 'number') return `${p.name}:${value.trim() && !isNaN(Number(value)) ? ' ' + value.trim() : ''}`;
+    if (type === 'multitext') {
+      const items = value.split(',').map((x) => x.trim()).filter(Boolean);
+      return items.length ? `${p.name}:\n${items.map((x) => `  - ${yamlScalar(x)}`).join('\n')}` : `${p.name}:`;
+    }
+    const s = value.trim();
+    if (type !== 'text') return `${p.name}:${s ? ' ' + s : ''}`; // date, datetime
+    return `${p.name}:${s ? ' ' + (/^-?\d+(\.\d+)?$/.test(s) ? JSON.stringify(s) : yamlScalar(s)) : ''}`;
+  }
+
+  async function clip(vid) {
+    const t = await send({ type: 'template' });
+    if (t.error) throw new Error(t.error);
+    const tpl = t.template;
+    if (!self.Defuddle) {
+      const r = await send({ type: 'inject' });
+      if (r.error || !self.Defuddle) throw new Error(`Defuddle did not load (${r.error || 'unknown'})`);
+    }
+    const url = `https://www.youtube.com/watch?v=${vid}`;
+    // YouTube changes videos without reloading the page, and what Defuddle
+    // reads from the page's own scripts stays the first video's. The live page
+    // is used only when it was loaded for this video; otherwise a fresh copy.
+    const fresh = [...document.scripts].some((s) => {
+      const m = s.textContent.indexOf('ytInitialPlayerResponse') >= 0 && s.textContent.match(/"videoDetails":\{"videoId":"([\w-]{11})"/);
+      return !!m && m[1] === vid;
+    });
+    let doc = document;
+    if (!fresh) {
+      const html = await (await fetch(url, { credentials: 'include' })).text();
+      doc = new DOMParser().parseFromString(html, 'text/html');
+      // The page as served carries its VideoObject without the description,
+      // which YouTube adds once the page runs; Defuddle reads it from there.
+      // The full text is in the player data of the same page.
+      const m = html.match(/"shortDescription":("(?:[^"\\]|\\.)*")/);
+      if (m) {
+        const description = JSON.parse(m[1]);
+        for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+          try {
+            const d = JSON.parse(s.textContent);
+            if (d && d['@type'] === 'VideoObject' && !d.description) {
+              d.description = description;
+              s.textContent = JSON.stringify(d);
+            }
+          } catch (_) { /* not ours to fix */ }
+        }
+      }
+    }
+    const r = await new self.Defuddle(doc, { url, markdown: true }).parseAsync();
+    const tags = r.metaTags || [];
+    const meta = (kind, key) => {
+      const hit = tags.find((m) => m[kind] === key);
+      if (hit) return hit.content;
+      const el = doc.querySelector(`meta[${kind}="${key}"]`);
+      return el ? el.getAttribute('content') : (key === 'og:url' ? url : '');
+    };
+    const now = new Date();
+    const vars = {
+      title: r.title || title(), author: r.author || '', image: r.image || '', published: r.published || '',
+      description: r.description || '', content: r.content || '', site: r.site || 'YouTube', domain: 'youtube.com',
+      url, date: formatDate(now, 'YYYY-MM-DD'), time: formatDate(now, 'YYYY-MM-DD HH:mm'),
+    };
+    const props = (tpl.properties || []).map((p) => yamlProperty(p, render(p.value, vars, meta)));
+    const body = render(tpl.noteContentFormat || '{{content}}', vars, meta);
+    return {
+      name: render(tpl.noteNameFormat || '{{title}}', vars, meta),
+      markdown: `---\n${props.join('\n')}\n---\n${body.replace(/^\n+/, '')}${body.endsWith('\n') ? '' : '\n'}`,
+      path: tpl.path || '',
+      vault: tpl.vault || '',
+      template: tpl.name || 'template',
+      fresh,
+    };
   }
 
   /* ---------------- saving ---------------- */
@@ -174,13 +295,25 @@
     else if (found && found.found) res = await send(Object.assign({ type: 'add', vault: found.vault, path: found.path }, info));
     else if (found) res = { need: 'place', vaults: found.vaults, last: found.last, folders: found.folders };
     else res = await send(Object.assign({ type: 'add' }, info));
+    let clipped = null, clipError = '';
     if (res.need === 'place') {
-      const place = await askPlace(res, info);
+      const t = await send({ type: 'template' });
+      const tpl = (t && t.template) || {};
+      const place = await askPlace(res, info, tpl);
       if (!place) return toast('Not saved.');
-      res = await send(Object.assign({ type: 'add', create: true }, info, place));
+      toast(`Clipping the video with the ${tpl.name || 'Web Clipper'} template…`, 30000);
+      try {
+        clipped = await clip(info.videoId);
+      } catch (e) {
+        clipError = e.message || String(e);
+      }
+      res = await send(Object.assign({ type: 'add', create: true }, info, place,
+        clipped ? { markdown: clipped.markdown, name: clipped.name } : {}));
     }
     if (res.error) return toast(problem(res), 10000, true);
-    toast(`Saved ${res.label}${res.created ? ' in a new note' : ''} · ${res.note} (${res.vault})`);
+    const where = `${res.note} (${res.vault})`;
+    if (clipError) return toast(`Saved ${res.label} in a new note, but without the clip: ${clipError}. ${where}`, 10000, true);
+    toast(`Saved ${res.label}${res.created ? (clipped ? ', clipped into a new note' : ' in a new note') : ''} · ${where}`);
   }
 
   let busy = false;

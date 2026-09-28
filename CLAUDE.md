@@ -223,6 +223,15 @@ changing it:
   on `automaticHere()`, for any note whose `media` is a `[[wikilink]]`. Drive videos
   (`file:///`) keep YouTube links: untested whether Media Extended 4.2.1 opens
   `[[<library note>#t=…]]` at a moment. Test that with 4T-HDD plugged in before changing it.
+- **A new note is clipped in the tab with Defuddle and his Web Clipper template (1.21.0).**
+  Web Clipper has no API for other extensions, so this reproduces it; `defuddle.js` is the
+  npm package's `dist/index.full.js` unchanged (update it by copying a newer one and
+  re-embedding). YouTube's in-page video changes leave the page's scripts on the first
+  video: `clip()` uses the live page only when its `videoDetails.videoId` matches, else a
+  fetched copy, whose VideoObject needs the description put in from `shortDescription`.
+  YouTube enforces Trusted Types, which blocks Defuddle in the page's own world and in a
+  DevTools-made isolated world, but not in the extension's content-script world: test
+  it through the extension, never by injecting it over the DevTools protocol.
 - **Test it end to end without touching his Chrome**: start Chrome headless with a throwaway
   `--user-data-dir`, `--remote-debugging-pipe` and `--enable-unsafe-extension-debugging`,
   copy the host manifest into `<user-data-dir>/NativeMessagingHosts/`, load the extension

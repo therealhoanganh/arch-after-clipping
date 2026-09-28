@@ -23,6 +23,13 @@
   <div class="row"><span>Save the Moment With a Line</span><button id="typed"></button></div>
   <div class="row"><span class="muted">Click a hotkey, then press the new keys. They work on YouTube pages only.</span><button id="reset">Restore Defaults</button></div>
 
+  <h2>Web Clipper Template</h2>
+  <div class="row"><span id="tpl-now" class="muted"></span></div>
+  <div class="row"><span class="muted">A video with no note yet is clipped with this template. After changing the template in Web Clipper, export it there (the template's ··· menu, Export) and import the file here.</span></div>
+  <div class="row"><span></span><button id="tpl-import">Import Template…</button><button id="tpl-reset">Use the Bundled One</button></div>
+  <input id="tpl-file" type="file" accept=".json,application/json" hidden>
+  <div id="tpl-result"></div>
+
   <h2>Helper</h2>
   <div class="row"><span class="muted">The helper is the program that writes into your vaults. ARCH After Clipping installs it.</span><button id="check">Check the Helper</button></div>
   <div id="check-result"></div>

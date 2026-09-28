@@ -6,7 +6,19 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.20.0 — current
+## 1.21.0 — current
+
+**A new video note is clipped with his Web Clipper template.** His words after using 1.20.0: *"Ok so the command work, but I think it should use the Web Clipper template too, like take note also mean to clip the video as well. I export the clipping template in Downloads."* The export, his *YouTube Video* template (`channel`, `banner`, `url`, `dl-ed`, `v-rank`, `duration`, `status: Watch Later`, `published`, `tags: yt-video`; body `{{content}}`; name `{{title}}`; folder `YouTube`), ships as the extension's `template.json`.
+
+- **Web Clipper cannot be asked to clip by another extension** (no external messaging; its quick clip runs from its own shortcut only), so the extension makes the note itself from the same template with the same library: **Defuddle 0.19.4** (MIT, `defuddle.js` copied unchanged from the npm package, with its licence), loaded into the tab through `chrome.scripting` only when a new note is made. `{{content}}` is therefore Web Clipper's own: the embed, the description, `## Transcript` with chapter headings and `**0:10** ·` lines. The template variables his template uses are filled (`title`, `author`, `image`, `published` with the `date` filter, `meta:property:og:url`, `content`), and each property is written by its type as Web Clipper writes it. The first timestamp goes below the embed, above the description.
+- **YouTube changes videos without reloading the page**, and what the page's own scripts hold stays the first video's. The live page is used only when its player data is for this video; otherwise a fresh copy is fetched. That copy's VideoObject lacks the description (YouTube adds it once the page runs), so it is filled from the same page's player data; without that, a video reached by clicking inside YouTube was clipped with no description (found in testing).
+- **The picker** says which template it clips with, and the folder starts at the template's (`YouTube`) until a folder is chosen for that vault; a template with its own vault preselects it. If clipping fails, the note is still made with the plain `url` and the reason is shown.
+- **The options page imports a newer export**, for when the template changes in Web Clipper, and can go back to the bundled one.
+- `main.js` grows from about 0.37 MB to 1.1 MB, nearly all of it Defuddle, embedded so the extension works offline and never fetches code.
+
+Tested in a headless Chrome with a throwaway profile, one video loaded directly and one reached by an in-page change of video: both notes came out with his template's properties, the description and (where YouTube has captions) the transcript; After Clipping then renamed them "Channel — Title", saved the thumbnail and filled `duration`, as for a Web Clipper clip. Test notes deleted, the helper's memory put back to his own choices.
+
+## 1.20.0
 
 **YouTube notes from Chrome.** His thought note of 2026-08-11, *YouTube on Chrome Instant Note-taking Hotkey*: *"Instantaneity: You're better of take notes from webpage first then to downloaded video later"*, with *"Tried to Ask AI: JDownloader 2 is not viable"*; on 2026-09-28 he asked *"Can we develop chrome hotkey for this?"* and chose, of the options put to him: *"Both, Like Cmd for bare timestamp and Cmd + Shift is plus a typed line – help me find suitable hotkey too"*, and for the vault, *"Ask the first time"*. He approved the plan (*"Ok go"*): a Chrome extension, a helper that writes the note on disk, and the relinking in this plugin, which owns single-video notes.
 

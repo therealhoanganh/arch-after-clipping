@@ -200,6 +200,36 @@ all four places, or not at all.
 Media Extended ever changes version, retest both points before trusting it. Only
 playback depends on it: the "already downloaded?" check reads the disk.
 
+## YouTube notes from Chrome (1.20.0)
+
+A Chrome extension (ARCH YouTube Notes) takes timestamp notes on YouTube, and a helper
+program (`host.py`, Chrome native messaging) writes them into the video's note on disk. His
+request, the hotkey choice and the tests are in `CHANGELOG.md`, 1.20.0. What to know before
+changing it:
+
+- **The source is `youtube-notes/`; `main.js` carries a generated copy** between the
+  `YOUTUBE_NOTES_FILES` markers. After editing any file there, run
+  `node tools/embed-youtube-notes.js`; `--check` exits 1 when `main.js` is behind. Never
+  edit the block by hand.
+- **The extension id is fixed by the `key` in its manifest** (`icepmkgljifnfffejmojdicdmnaokiei`),
+  so it is the same on every computer and the host manifest can allow only it. Changing
+  the key changes the id and breaks the helper until Set Up runs again.
+- **The launcher names Python by a stable full path** (`pythonForHelper`): Chrome starts it
+  with almost no PATH, and `sys.executable` on Homebrew is `python@3.14/...`, which the next
+  upgrade removes. The helper must stay Python 3.9 compatible (macOS's own `/usr/bin/python3`).
+- **The helper writes the file directly**, so a line can land while this plugin is
+  processing the same note; `vault.process` reads fresh, so the window is small, not zero.
+- **Timestamps are relinked by `watchYouTubeStamps`** on `metadataCache` `changed`, gated
+  on `automaticHere()`, for any note whose `media` is a `[[wikilink]]`. Drive videos
+  (`file:///`) keep YouTube links: untested whether Media Extended 4.2.1 opens
+  `[[<library note>#t=…]]` at a moment. Test that with 4T-HDD plugged in before changing it.
+- **Test it end to end without touching his Chrome**: start Chrome headless with a throwaway
+  `--user-data-dir`, `--remote-debugging-pipe` and `--enable-unsafe-extension-debugging`,
+  copy the host manifest into `<user-data-dir>/NativeMessagingHosts/`, load the extension
+  with the DevTools call `Extensions.loadUnpacked`, open a video and send the keys with
+  `Input.dispatchKeyEvent` (Meta is modifier 4, Shift 8). Branded Chrome ignores
+  `--load-extension`. The overlay's shadow root is open, so the page can read it.
+
 ## One computer does the automatic work (1.18.0)
 
 The vaults are mirrored between the Mac and an Ubuntu PC (Syncthing, since 2026-09-25), so

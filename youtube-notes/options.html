@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ARCH YouTube Notes</title>
+<style>
+  body { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; min-width: 420px; color: #222; background: #fff; }
+  @media (prefers-color-scheme: dark) { body { color: #eee; background: #292a2d; } .muted { color: #aaa !important; } button { color: #eee; } }
+  h2 { font-size: 15px; margin: 18px 0 8px; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+  .row span { flex: 1; }
+  button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid #888; background: transparent; cursor: pointer; min-width: 150px; }
+  button.recording { border-color: #1a73e8; color: #1a73e8; }
+  .muted { color: #666; font-size: 13px; }
+  #check-result { white-space: pre-wrap; margin-top: 8px; }
+  .bad { color: #d93025; }
+  .good { color: #188038; }
+</style>
+</head>
+<body>
+  <h2>Hotkeys on YouTube</h2>
+  <div class="row"><span>Save the Moment</span><button id="bare"></button></div>
+  <div class="row"><span>Save the Moment With a Line</span><button id="typed"></button></div>
+  <div class="row"><span class="muted">Click a hotkey, then press the new keys. They work on YouTube pages only.</span><button id="reset">Restore Defaults</button></div>
+
+  <h2>Helper</h2>
+  <div class="row"><span class="muted">The helper is the program that writes into your vaults. ARCH After Clipping installs it.</span><button id="check">Check the Helper</button></div>
+  <div id="check-result"></div>
+  <script src="options.js"></script>
+</body>
+</html>

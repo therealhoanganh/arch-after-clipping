@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "ARCH YouTube Notes",
+  "version": "1.0.0",
+  "description": "Timestamp notes on a YouTube video straight into its Obsidian note: Cmd+K saves the moment, Cmd+Shift+K saves it with a line you type. Written by the Obsidian plugin ARCH After Clipping.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn8nSScQ3jgTTnIvd+zomV4Pt9y/LEoLVgfOJ1GZGpljLn6B24AbljawiEG0Bx5gWZdu8vqDvIWKU/PgeRwOPcFsoVzeqBMxwE+z23e8xdIyFpB9LTM44qYNiWZPrI4bjd118x00+R7ABLtKAqbQ3PniabEP3iklS6IEky+ny+F47nKJHM5rW5CwYYIzMhplbEGg0TNMo3iJz9JjTGfOs1Dvx3DAsTCw0tOFI1PJAWA2Ykf/rgA5o3agd/f9VOQij9NjFvZuc7w5rcHT8RCMZl3CxqIc/LuceYl5h0AK30yV8/h7sSAcknEYTL/dbZSc8MAKExwAziuwmJhkhf6CF3wIDAQAB",
+  "permissions": ["nativeMessaging", "storage"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "options_ui": { "page": "options.html", "open_in_tab": false }
+}

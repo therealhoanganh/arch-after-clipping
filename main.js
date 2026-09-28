@@ -14,7 +14,7 @@ const {
   requestUrl,
 } = require('obsidian');
 
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -419,6 +419,105 @@ function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/* ------------------------------------------------------------------ *
+ * YouTube notes from Chrome (1.20.0)
+ * ------------------------------------------------------------------ */
+
+// A Chrome extension (ARCH YouTube Notes) takes timestamp notes on YouTube and
+// a helper program writes them into the video's note on disk; the files live in
+// youtube-notes/ and are embedded at the end of this file. They are written to
+// a fixed folder outside the vaults, because Chrome loads an unpacked extension
+// by path. The extension's key is fixed in its manifest, so its id is the same
+// on every computer and the helper can name it as the only one allowed.
+const YTN_EXTENSION_ID = 'icepmkgljifnfffejmojdicdmnaokiei';
+const YTN_HOST = 'com.hoanganh.arch_youtube_notes';
+const YTN_LAUNCHER = 'arch-youtube-notes-helper';
+
+function ytnFolder(home = os.homedir(), platform = process.platform) {
+  return platform === 'darwin'
+    ? path.join(home, 'Library', 'Application Support', 'ARCH YouTube Notes')
+    : path.join(home, '.local', 'share', 'arch-youtube-notes');
+}
+
+function chromeFolder(home = os.homedir(), platform = process.platform) {
+  return platform === 'darwin'
+    ? path.join(home, 'Library', 'Application Support', 'Google', 'Chrome')
+    : path.join(home, '.config', 'google-chrome');
+}
+
+function ytnHostManifestPath() {
+  return path.join(chromeFolder(), 'NativeMessagingHosts', `${YTN_HOST}.json`);
+}
+
+// Whether Chrome lists the extension in any profile. Chrome keeps an unpacked
+// extension's entry in "Secure Preferences", written a few seconds after the change.
+function ytnChromeState() {
+  const base = chromeFolder();
+  let dirs;
+  try {
+    dirs = fs.readdirSync(base).filter((d) => d === 'Default' || /^Profile \d+$/.test(d));
+  } catch (_) {
+    return { state: 'no-chrome', base };
+  }
+  let off = null;
+  for (const d of dirs) {
+    for (const f of ['Secure Preferences', 'Preferences']) {
+      let e = null;
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(base, d, f), 'utf8'));
+        e = j.extensions && j.extensions.settings && j.extensions.settings[YTN_EXTENSION_ID];
+      } catch (_) { /* unreadable, try the next */ }
+      if (!e) continue;
+      const reasons = Array.isArray(e.disable_reasons) ? e.disable_reasons.length : e.disable_reasons;
+      if (!reasons && e.state !== 0) return { state: 'loaded', profile: d };
+      off = { state: 'disabled', profile: d };
+    }
+  }
+  return off || { state: 'missing', base };
+}
+
+function youtubeIdOf(url) {
+  const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?(?:[^\s#]*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+// The downloaded file a timestamp can open: a [[wikilink]] in media, a video
+// before an audio file. A file:/// video on the outside drive gives none,
+// because Media Extended opens a markdown link to a file:/// address in the
+// web browser.
+function localMediaTarget(media) {
+  const links = (Array.isArray(media) ? media : media ? [media] : [])
+    .map((v) => { const m = String(v).trim().match(/^\[\[([^\]|#]+)/); return m ? m[1].trim() : null; })
+    .filter(Boolean);
+  return links.find((l) => /\.(mp4|webm|mkv|mov|m4v)$/i.test(l))
+    || links.find((l) => /\.(mp3|m4a|opus|ogg|wav|flac)$/i.test(l))
+    || null;
+}
+
+// [12:34](https://youtu.be/ID?t=754) becomes [[file.webm#t=754|12:34]], the
+// form Media Extended opens at that moment, in the body only.
+function relinkYouTubeStamps(content, id, target) {
+  const { fm, body } = splitFrontmatter(content);
+  const rx = new RegExp(`\\[(\\d[\\d:]*)\\]\\(https://youtu\\.be/${escapeRegExp(id)}\\?t=(\\d+)\\)`, 'g');
+  let n = 0;
+  const out = body.replace(rx, (_, lab, sec) => { n++; return `[[${target}#t=${sec}|${lab}]]`; });
+  return { text: fm + out, n };
+}
+
+function renderYouTubeNotesStatus(el, st) {
+  el.empty();
+  const list = el.createEl('ul');
+  list.style.margin = '0 0 12px';
+  list.style.paddingLeft = '20px';
+  for (const i of st.items) {
+    const li = list.createEl('li');
+    li.style.marginBottom = '4px';
+    li.style.color = i.ok ? 'var(--text-success)' : 'var(--text-error)';
+    if (i.ok) li.setText(`✓ ${i.text}`);
+    else li.setText(`✗ ${i.problem} ${i.fails} To fix: ${i.fix}`);
+  }
+}
+
 function urlLooksLikeImage(url) {
   try {
     const clean = new URL(url).pathname.toLowerCase();
@@ -518,6 +617,8 @@ module.exports = class ClipArchiver extends Plugin {
       this.watchDriveQueue();
       this.watchDeletedDriveNotes();
       this.catchUpStartupClips();
+      this.watchYouTubeStamps();
+      this.updateYouTubeNotesIfInstalled();
     });
 
     this.addRibbonIcon('archive', 'Archive This Clip', () => this.archiveActiveNote());
@@ -667,6 +768,24 @@ module.exports = class ClipArchiver extends Plugin {
       name: 'Update yt-dlp',
       callback: () => this.updateYtDlp(),
     });
+    this.addCommand({
+      id: 'set-up-youtube-notes',
+      name: 'Set Up YouTube Notes From Chrome',
+      callback: async () => {
+        const st = await this.setupYouTubeNotes();
+        new Notice(st.items.map((i) => (i.ok ? `✓ ${i.text}` : `✗ ${i.problem} ${i.fix}`)).join('\n\n'), 20000);
+      },
+    });
+    this.addCommand({
+      id: 'point-youtube-timestamps',
+      name: 'Point YouTube Timestamps at the Downloaded Video',
+      checkCallback: (checking) => {
+        const f = this.app.workspace.getActiveFile();
+        if (!f || f.extension !== 'md') return false;
+        if (!checking) this.pointStampsAtVideo(f, this.app.metadataCache.getFileCache(f), true);
+        return true;
+      },
+    });
 
     // First run: find the tools instead of making the user type paths.
     if (!this.settings.setupDone) {
@@ -794,6 +913,212 @@ module.exports = class ClipArchiver extends Plugin {
       if (p === marked || p.startsWith(marked + '/')) return true;
     }
     return false;
+  }
+
+  /* ---------------- YouTube notes from Chrome (1.20.0) ---------------- */
+
+  // Started by hand. Writes the extension and the helper to ytnFolder(),
+  // registers the helper with Chrome (a native messaging host manifest), then
+  // checks every part and returns what it found.
+  async setupYouTubeNotes() {
+    const folder = ytnFolder();
+    const python = await this.resolvePython();
+    if (python) {
+      const exe = await this.pythonForHelper(python);
+      this.writeYouTubeNotesFiles(folder);
+      const launcher = path.join(folder, 'helper', YTN_LAUNCHER);
+      fs.writeFileSync(launcher,
+        `#!/bin/sh\n# Written by ARCH After Clipping: starts the helper with the Python it found.\nexec "${exe}" "${path.join(folder, 'helper', 'host.py')}" "$@"\n`);
+      fs.chmodSync(launcher, 0o755);
+      const manifest = ytnHostManifestPath();
+      fs.mkdirSync(path.dirname(manifest), { recursive: true });
+      fs.writeFileSync(manifest, JSON.stringify({
+        name: YTN_HOST,
+        description: 'ARCH YouTube Notes helper, written by ARCH After Clipping',
+        path: launcher,
+        type: 'stdio',
+        allowed_origins: [`chrome-extension://${YTN_EXTENSION_ID}/`],
+      }, null, 2) + '\n');
+      this.log('YouTube notes: wrote the extension and helper to', folder, 'with python', exe, '; registered', manifest);
+    } else {
+      this.log('YouTube notes: set up stopped, no Python 3 found');
+    }
+    const st = await this.youTubeNotesStatus(python);
+    for (const i of st.items) this.log(`YouTube notes: ${i.ok ? 'ok' : 'PROBLEM'}: ${i.ok ? i.text : i.problem}`);
+    return st;
+  }
+
+  // Chrome starts the helper with almost no PATH, so the launcher names Python
+  // by its full path. A stable link (/usr/local/bin/python3) comes before
+  // sys.executable, which on Homebrew is a versioned path (python@3.14/...)
+  // that disappears at the next Python upgrade.
+  async pythonForHelper(python) {
+    const works = async (c) => {
+      const r = await this.runProcess(c, ['-c', 'import sys; print(sys.version_info[0])'], { timeoutMs: 8000 })
+        .catch(() => null);
+      return !!r && r.code === 0 && r.stdout.trim() === '3';
+    };
+    const stable = [
+      path.isAbsolute(python) ? python : null,
+      '/opt/homebrew/bin/python3',
+      '/usr/local/bin/python3',
+      '/usr/bin/python3',
+    ].filter(Boolean);
+    for (const c of stable) if (fs.existsSync(c) && (await works(c))) return c;
+    const r = await this.runProcess(python, ['-c', 'import sys; print(sys.executable)'], { timeoutMs: 8000 })
+      .catch(() => ({ stdout: '' }));
+    return r.stdout.trim() || python;
+  }
+
+  // Writes only what differs, so an unchanged extension is not touched.
+  // Returns the names written.
+  writeYouTubeNotesFiles(folder) {
+    const written = [];
+    for (const [name, text] of Object.entries(YOUTUBE_NOTES_FILES)) {
+      const dir = path.join(folder, name === 'host.py' ? 'helper' : 'extension');
+      fs.mkdirSync(dir, { recursive: true });
+      const p = path.join(dir, name);
+      let old = null;
+      try { old = fs.readFileSync(p, 'utf8'); } catch (_) { /* new */ }
+      if (old !== text) {
+        fs.writeFileSync(p, text);
+        written.push(name);
+      }
+    }
+    return written;
+  }
+
+  // At startup, once set up on this computer: keep the extension and helper
+  // at this version. Not gated on automaticOn, because the folder is outside
+  // the vaults and each computer has its own copy.
+  updateYouTubeNotesIfInstalled() {
+    const folder = ytnFolder();
+    if (!fs.existsSync(path.join(folder, 'helper', YTN_LAUNCHER))) return;
+    try {
+      const written = this.writeYouTubeNotesFiles(folder);
+      if (!written.length) return this.log('YouTube notes: extension and helper already current');
+      this.log('YouTube notes: updated', written.join(', '));
+      if (written.some((n) => n !== 'host.py')) {
+        new Notice('ARCH YouTube Notes was updated. In Chrome, open chrome://extensions and press its reload arrow, then reload any YouTube tab, or Chrome keeps running the old version.', 15000);
+      }
+    } catch (e) {
+      this.log('YouTube notes: could not update the files in', folder, e.message);
+    }
+  }
+
+  // Each part, with what fails when it is missing and how to fix it.
+  async youTubeNotesStatus(python) {
+    const folder = ytnFolder();
+    const ext = path.join(folder, 'extension');
+    const items = [];
+    const extOk = fs.existsSync(path.join(ext, 'manifest.json')) && fs.existsSync(path.join(ext, 'content.js'));
+    items.push(extOk
+      ? { ok: true, text: `The extension is written to ${ext}.` }
+      : { ok: false, problem: 'The extension is not written yet.', fails: 'Chrome has nothing to load, so the hotkeys do nothing.', fix: 'Press Set Up.' });
+
+    if (python === null) {
+      items.push({ ok: false, problem: 'No Python 3 was found.', fails: 'The helper that writes into your vaults cannot run, so nothing you note is saved.', fix: 'Install Python 3 (on the Mac, run xcode-select --install in Terminal), or fill in the Python path under Transform, then press Set Up again.' });
+    }
+    let reg = null;
+    try { reg = JSON.parse(fs.readFileSync(ytnHostManifestPath(), 'utf8')); } catch (_) { /* not registered */ }
+    if (!reg || !reg.path) {
+      items.push({ ok: false, problem: 'The helper is not registered with Chrome.', fails: 'Every note on YouTube ends in "Chrome could not start the helper", and nothing is saved.', fix: 'Press Set Up.' });
+    } else {
+      const ping = await this.pingYouTubeHelper(reg.path);
+      items.push(ping && ping.ok
+        ? { ok: true, text: `The helper answers (Python ${ping.python}, ${ping.vaults} vault${ping.vaults === 1 ? '' : 's'} found).` }
+        : { ok: false, problem: `The helper does not answer: ${(ping && ping.error) || 'no answer'}.`, fails: 'Nothing you note on YouTube is saved.', fix: 'Press Set Up again. If this line stays red, the console (Cmd + Option + I) has the log lines starting "YouTube notes".' });
+    }
+
+    const chrome = ytnChromeState();
+    if (chrome.state === 'loaded') {
+      items.push({ ok: true, text: `Chrome has the extension loaded (profile ${chrome.profile}). The hotkeys work on YouTube pages; the extension's options page changes them.` });
+    } else if (chrome.state === 'disabled') {
+      items.push({ ok: false, problem: `The extension is switched off in Chrome (profile ${chrome.profile}).`, fails: 'The hotkeys do nothing on YouTube.', fix: 'Open chrome://extensions, switch ARCH YouTube Notes on, then press Check Again.' });
+    } else if (chrome.state === 'no-chrome') {
+      items.push({ ok: false, problem: `No Chrome profile folder was found at ${chrome.base}.`, fails: 'Only Google Chrome is supported, so the hotkeys are not available.', fix: 'Install Google Chrome and open it once, then press Check Again.' });
+    } else {
+      items.push({ ok: false, problem: 'Chrome has not loaded the extension yet.', fails: 'The hotkeys do nothing on YouTube.', fix: `In Chrome, open chrome://extensions, switch on Developer mode (top right), click Load unpacked and choose the folder ${ext} (Show Folder opens it). Chrome records it a few seconds later; then press Check Again and this line turns green.` });
+    }
+    return { folder, items };
+  }
+
+  // Starts the helper the way Chrome does and asks it one question.
+  pingYouTubeHelper(launcher) {
+    return new Promise((resolve) => {
+      let child;
+      try {
+        child = spawn(launcher, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+      } catch (e) {
+        return resolve({ error: e.message });
+      }
+      const chunks = [];
+      let err = '';
+      const timer = setTimeout(() => { child.kill(); resolve({ error: 'no answer within 10 seconds' }); }, 10000);
+      child.stdout.on('data', (d) => chunks.push(d));
+      child.stderr.on('data', (d) => { err += d; });
+      child.on('error', (e) => { clearTimeout(timer); resolve({ error: e.message }); });
+      child.on('close', () => {
+        clearTimeout(timer);
+        const buf = Buffer.concat(chunks);
+        if (buf.length < 4) return resolve({ error: err.trim().split('\n').pop() || 'it exited without answering' });
+        try {
+          resolve(JSON.parse(buf.slice(4, 4 + buf.readUInt32LE(0)).toString('utf8')));
+        } catch (e) {
+          resolve({ error: `unreadable answer (${e.message})` });
+        }
+      });
+      const body = Buffer.from(JSON.stringify({ type: 'ping' }), 'utf8');
+      const head = Buffer.alloc(4);
+      head.writeUInt32LE(body.length, 0);
+      child.stdin.on('error', () => {});
+      child.stdin.end(Buffer.concat([head, body]));
+    });
+  }
+
+  // When a note holding YouTube timestamps gets its download (media set by
+  // this plugin, by YT Playlists, or by hand), point the timestamps at the
+  // file. Obsidian re-reads notes changed while it was closed at startup,
+  // which fires this too.
+  watchYouTubeStamps() {
+    this.registerEvent(
+      this.app.metadataCache.on('changed', (file, data, cache) => {
+        if (!data || data.indexOf('](https://youtu.be/') < 0) return;
+        if (!this.automaticHere()) return;
+        this.pointStampsAtVideo(file, cache, false);
+      })
+    );
+  }
+
+  async pointStampsAtVideo(file, cache, manual) {
+    const fm = cache && cache.frontmatter;
+    const say = (m) => {
+      if (manual) new Notice(m);
+      this.log('YouTube timestamps:', m, '-', file.path);
+    };
+    const id = youtubeIdOf(this.resolveSourceUrl(fm));
+    if (!id) {
+      if (manual) say('This note has no YouTube address in its properties.');
+      return;
+    }
+    const target = localMediaTarget(fm && fm.media);
+    if (!target) {
+      const drive = /^file:/.test(String((fm && fm.media) || ''));
+      if (manual || drive) {
+        say(drive
+          ? 'Left on YouTube: the video is on the outside drive, and a timestamp link cannot open a file there yet.'
+          : 'No downloaded video or audio in this note\'s media property yet, so the timestamps stay on YouTube.');
+      }
+      return;
+    }
+    let n = 0;
+    await this.app.vault.process(file, (text) => {
+      const r = relinkYouTubeStamps(text, id, target);
+      n = r.n;
+      return r.text;
+    });
+    if (n) say(`Pointed ${n} timestamp${n === 1 ? '' : 's'} at ${target}.`);
+    else if (manual) say('No YouTube timestamps of this video in this note.');
   }
 
   automaticHere() {
@@ -5862,6 +6187,31 @@ class ClipArchiverSettingTab extends PluginSettingTab {
         })
       );
 
+    /* ---- YouTube notes from Chrome ---- */
+    new Setting(containerEl).setName('YouTube Notes From Chrome').setHeading();
+    const mod = process.platform === 'darwin' ? 'Cmd' : 'Alt';
+    new Setting(containerEl)
+      .setName('Timestamp Notes While Watching')
+      .setDesc(`On YouTube in Chrome, ${mod} + K saves the moment and ${mod} + Shift + K saves it with a line you type, into the video's note in any vault; the first note on a new video asks which vault. Once the video is downloaded, its timestamps point at the file. Set Up writes the Chrome extension and its helper; loading the extension into Chrome is one step by hand, shown below.`)
+      .addButton((b) =>
+        b.setButtonText('Set Up').setCta().onClick(async () => {
+          b.setDisabled(true);
+          await this.plugin.setupYouTubeNotes();
+          this.display();
+        })
+      )
+      .addButton((b) =>
+        b.setButtonText('Show Folder').onClick(() => {
+          const ext = path.join(ytnFolder(), 'extension');
+          if (fs.existsSync(ext)) require('electron').shell.openPath(ext);
+          else new Notice('Nothing written yet: press Set Up first.');
+        })
+      )
+      .addExtraButton((b) => b.setIcon('refresh-cw').setTooltip('Check Again').onClick(() => this.display()));
+    const ytnStatus = containerEl.createDiv({ cls: 'arch-ytn-status' });
+    ytnStatus.setText('Checking…');
+    this.plugin.youTubeNotesStatus().then((st) => renderYouTubeNotesStatus(ytnStatus, st));
+
     new Setting(containerEl).setName('Troubleshooting').setHeading();
 
     new Setting(containerEl)
@@ -6237,3 +6587,22 @@ if __name__ == "__main__":
     sys.exit(main())
 `,
 };
+
+
+/* ------------------------------------------------------------------ *
+ * YouTube notes from Chrome: the extension and helper files (1.20.0)
+ *
+ * The source is youtube-notes/ in the repository; this block is written from
+ * it by tools/embed-youtube-notes.js, and `--check` says when it is behind.
+ * ------------------------------------------------------------------ */
+
+// BEGIN YOUTUBE_NOTES_FILES (written by tools/embed-youtube-notes.js from youtube-notes/, never edit by hand)
+const YOUTUBE_NOTES_FILES = {
+ "background.js": "// Written by ARCH After Clipping. Edits here are overwritten when the plugin\n// updates the extension; change youtube-notes/ in the plugin's repository.\n//\n// The page script cannot talk to the helper program itself, so every request\n// comes here and goes on to it through Chrome's native messaging.\n'use strict';\n\nconst HOST = 'com.hoanganh.arch_youtube_notes';\n\nchrome.runtime.onMessage.addListener((msg, sender, reply) => {\n  if (msg && msg.type === 'options') {\n    chrome.runtime.openOptionsPage();\n    return false;\n  }\n  chrome.runtime.sendNativeMessage(HOST, msg, (res) => {\n    const err = chrome.runtime.lastError;\n    if (err) reply({ error: err.message, noHelper: true });\n    else reply(res || { error: 'The helper sent no answer.' });\n  });\n  return true; // the answer comes later\n});\n",
+ "content.js": "// Written by ARCH After Clipping. Edits here are overwritten when the plugin\n// updates the extension; change youtube-notes/ in the plugin's repository.\n//\n// On YouTube only: one hotkey saves the moment, another pauses and saves the\n// moment with a line typed into a small box. The first note on a video asks\n// which vault it goes to, unless the video already has a note somewhere.\n// Runs at document_start so its key listener sits ahead of YouTube's own.\n'use strict';\n(() => {\n  const IS_MAC = /Mac/i.test(navigator.platform);\n  const DEFAULT_KEYS = {\n    bare: { code: 'KeyK', meta: IS_MAC, ctrl: false, alt: !IS_MAC, shift: false },\n    typed: { code: 'KeyK', meta: IS_MAC, ctrl: false, alt: !IS_MAC, shift: true },\n  };\n  let keys = DEFAULT_KEYS;\n  try {\n    chrome.storage.sync.get('keys', (r) => { if (r && r.keys) keys = r.keys; });\n    chrome.storage.onChanged.addListener((c) => { if (c.keys) keys = c.keys.newValue || DEFAULT_KEYS; });\n  } catch (e) { /* the defaults stand */ }\n\n  const same = (e, k) => !!k && e.code === k.code && e.metaKey === !!k.meta && e.ctrlKey === !!k.ctrl\n    && e.altKey === !!k.alt && e.shiftKey === !!k.shift;\n\n  const label = (sec) => {\n    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;\n    const pad = (n) => String(n).padStart(2, '0');\n    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;\n  };\n\n  function videoId() {\n    const u = new URL(location.href);\n    if (u.pathname === '/watch') return u.searchParams.get('v');\n    const m = u.pathname.match(/^\\/(?:shorts|live)\\/([\\w-]{11})/);\n    return m ? m[1] : null;\n  }\n  const player = () => document.querySelector('#movie_player video') || document.querySelector('video');\n  const adShowing = () => !!document.querySelector('#movie_player.ad-showing');\n  function title() {\n    const h = document.querySelector('ytd-watch-metadata h1') || document.querySelector('#title h1');\n    const t = h && h.textContent.trim();\n    return t || document.title.replace(/^\\(\\d+\\)\\s*/, '').replace(/\\s*-\\s*YouTube$/, '').trim();\n  }\n\n  function send(msg) {\n    return new Promise((resolve) => {\n      try {\n        chrome.runtime.sendMessage(msg, (r) => {\n          const e = chrome.runtime.lastError;\n          resolve(e ? { error: e.message } : r || { error: 'No answer from the extension.' });\n        });\n      } catch (e) {\n        resolve({ error: 'The extension was reloaded since this tab opened. Reload this YouTube tab and press again.' });\n      }\n    });\n  }\n\n  /* ---------------- the small window over the video ---------------- */\n\n  let host = null, root = null, open = null; // open: the box currently asking\n  function ui() {\n    if (!host) {\n      host = document.createElement('div');\n      host.id = 'arch-youtube-notes';\n      root = host.attachShadow({ mode: 'open' });\n      root.innerHTML = `<style>\n        :host { all: initial; }\n        .wrap { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 2147483647;\n          font: 14px/1.4 Roboto, \"Helvetica Neue\", Arial, sans-serif; color: #fff; }\n        .toast, .box { background: rgba(20, 20, 20, 0.92); border: 1px solid rgba(255, 255, 255, 0.18);\n          border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }\n        .toast { padding: 8px 14px; max-width: 70vw; }\n        .toast.bad { border-color: #ff6b6b; }\n        .box { padding: 12px 14px; width: min(560px, 80vw); }\n        .head { font-size: 12px; color: #bbb; margin-bottom: 8px; }\n        .head b { color: #fff; font-weight: 500; }\n        label { display: block; font-size: 12px; color: #bbb; margin: 8px 0 4px; }\n        input, select { box-sizing: border-box; width: 100%; padding: 7px 9px; border-radius: 6px;\n          border: 1px solid rgba(255, 255, 255, 0.25); background: #111; color: #fff; font: inherit; outline: none; }\n        input:focus, select:focus { border-color: #3ea6ff; }\n        .row { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 10px; }\n        .hint { flex: 1; font-size: 12px; color: #999; }\n        button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.25);\n          background: transparent; color: #fff; cursor: pointer; }\n        button.go { background: #3ea6ff; border-color: #3ea6ff; color: #0f0f0f; font-weight: 500; }\n        [hidden] { display: none !important; }\n      </style><div class=\"wrap\"><div class=\"toast\" hidden></div><div class=\"box\" hidden></div></div>`;\n    }\n    const parent = document.fullscreenElement || document.body || document.documentElement;\n    if (host.parentNode !== parent) parent.appendChild(host);\n    return root;\n  }\n  document.addEventListener('fullscreenchange', () => { if (host && host.isConnected) ui(); });\n\n  let toastTimer = 0;\n  function toast(text, ms = 2600, bad = false) {\n    const t = ui().querySelector('.toast');\n    t.textContent = text;\n    t.classList.toggle('bad', bad);\n    t.hidden = false;\n    clearTimeout(toastTimer);\n    toastTimer = setTimeout(() => { t.hidden = true; }, ms);\n  }\n\n  // One box at a time. Resolves with the answer, or null on Esc / Cancel.\n  function box(html, onEnter, focusSel) {\n    const r = ui();\n    r.querySelector('.toast').hidden = true;\n    const b = r.querySelector('.box');\n    b.innerHTML = html;\n    b.hidden = false;\n    return new Promise((resolve) => {\n      const done = (v) => { b.hidden = true; b.innerHTML = ''; open = null; resolve(v); };\n      open = { enter: () => { const v = onEnter(b); if (v !== undefined) done(v); }, cancel: () => done(null) };\n      const go = b.querySelector('button.go'), no = b.querySelector('button.no');\n      if (go) go.onclick = () => open && open.enter();\n      if (no) no.onclick = () => open && open.cancel();\n      setTimeout(() => { const f = b.querySelector(focusSel); if (f) f.focus(); }, 0);\n    });\n  }\n\n  const esc = (s) => String(s).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' })[c]);\n\n  const askText = (at) => box(`\n      <div class=\"head\">Note at <b>${esc(at)}</b></div>\n      <input class=\"text\" type=\"text\" placeholder=\"What happens here\" autocomplete=\"off\">\n      <div class=\"row\"><span class=\"hint\">Enter saves · Esc cancels</span></div>`,\n    (b) => b.querySelector('.text').value, '.text');\n\n  async function askPlace(res, info) {\n    const vaults = res.vaults || [];\n    if (!vaults.length) {\n      toast('Not saved: no Obsidian vault found on this computer. Open Obsidian once so it lists its vaults, then press again.', 8000, true);\n      return null;\n    }\n    const last = vaults.includes(res.last) ? res.last : vaults[0];\n    const folders = res.folders || {};\n    const answer = box(`\n        <div class=\"head\">New note for <b>${esc(info.title || info.videoId)}</b></div>\n        <label>Which Vault</label>\n        <select class=\"vault\">${vaults.map((v) => `<option${v === last ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>\n        <label>Folder For the New Note</label>\n        <input class=\"folder\" type=\"text\" list=\"arch-ytn-folders\" placeholder=\"The vault's top level when empty\" autocomplete=\"off\">\n        <datalist id=\"arch-ytn-folders\"></datalist>\n        <div class=\"row\"><span class=\"hint\">Asked once per video · Enter saves · Esc cancels</span>\n          <button class=\"no\">Cancel</button><button class=\"go\">Save Here</button></div>`,\n      (b) => ({ vault: b.querySelector('.vault').value, folder: b.querySelector('.folder').value.trim() }), '.vault');\n    const b = root.querySelector('.box');\n    const sel = b.querySelector('.vault'), folder = b.querySelector('.folder'), list = b.querySelector('datalist');\n    const fill = async () => {\n      folder.value = folders[sel.value] || '';\n      list.innerHTML = '';\n      const r = await send({ type: 'folders', vault: sel.value });\n      list.innerHTML = (r.folders || []).map((f) => `<option value=\"${esc(f)}\">`).join('');\n    };\n    sel.onchange = fill;\n    fill();\n    return answer;\n  }\n\n  /* ---------------- saving ---------------- */\n\n  function problem(res) {\n    if (res.noHelper) {\n      return `Not saved: Chrome could not start the helper (${res.error}). In Obsidian, run the command `\n        + '\"Set Up YouTube Notes From Chrome\" (ARCH After Clipping), then press this extension\\'s reload arrow in chrome://extensions and press again.';\n    }\n    return `Not saved: ${res.error}`;\n  }\n\n  async function save(info, lookup) {\n    let res;\n    const found = lookup ? await lookup : null;\n    if (found && found.error) res = found;\n    else if (found && found.found) res = await send(Object.assign({ type: 'add', vault: found.vault, path: found.path }, info));\n    else if (found) res = { need: 'place', vaults: found.vaults, last: found.last, folders: found.folders };\n    else res = await send(Object.assign({ type: 'add' }, info));\n    if (res.need === 'place') {\n      const place = await askPlace(res, info);\n      if (!place) return toast('Not saved.');\n      res = await send(Object.assign({ type: 'add', create: true }, info, place));\n    }\n    if (res.error) return toast(problem(res), 10000, true);\n    toast(`Saved ${res.label}${res.created ? ' in a new note' : ''} · ${res.note} (${res.vault})`);\n  }\n\n  let busy = false;\n  async function press(typed) {\n    if (busy) return;\n    const vid = videoId();\n    if (!vid) return toast('No video on this page: open a video, then press again.');\n    if (adShowing()) return toast('An ad is playing. Press again once the video is back.');\n    const v = player();\n    if (!v) return toast('No video player found on this page.');\n    const info = { videoId: vid, seconds: Math.floor(v.currentTime || 0), title: title() };\n    busy = true;\n    try {\n      if (!typed) {\n        toast(`Saving ${label(info.seconds)}…`, 15000);\n        return await save(info, null);\n      }\n      const wasPlaying = !v.paused;\n      v.pause();\n      const lookup = send({ type: 'find', videoId: vid }); // searched while you type\n      const text = await askText(label(info.seconds));\n      if (wasPlaying) v.play();\n      if (text === null) return toast('Not saved.');\n      info.text = text;\n      await save(info, lookup);\n    } finally {\n      busy = false;\n    }\n  }\n\n  // Keys: capture phase on window, registered before YouTube's scripts run,\n  // so a hotkey never reaches the page and typing in the box never reaches\n  // YouTube's own shortcuts (k, j, l, f, space...).\n  const inBox = (e) => host && e.composedPath().includes(host);\n  window.addEventListener('keydown', (e) => {\n    if (open && inBox(e)) {\n      e.stopImmediatePropagation();\n      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); open.enter(); }\n      else if (e.key === 'Escape') { e.preventDefault(); open.cancel(); }\n      return;\n    }\n    const typed = same(e, keys.typed);\n    if (!typed && !same(e, keys.bare)) return;\n    e.preventDefault();\n    e.stopImmediatePropagation();\n    if (open) return; // a box is already asking\n    press(typed);\n  }, true);\n  for (const type of ['keyup', 'keypress']) {\n    window.addEventListener(type, (e) => { if (open && inBox(e)) e.stopImmediatePropagation(); }, true);\n  }\n})();\n",
+ "host.py": "# Written by ARCH After Clipping. Edits here are overwritten when the plugin\n# updates the helper; change youtube-notes/ in the plugin's repository.\n#\n# The helper Chrome starts for ARCH YouTube Notes. It writes the timestamp\n# lines into the video's note on disk, so Obsidian does not need to be open,\n# and it remembers which note belongs to which video (state.json beside it).\n# Chrome talks to it in native messaging: a 4-byte length, then JSON.\nimport json\nimport os\nimport re\nimport struct\nimport sys\nimport time\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nSTATE = os.path.join(HERE, 'state.json')\nHOME = os.path.expanduser('~')\nOBSIDIAN_JSON = [\n    os.path.join(HOME, 'Library', 'Application Support', 'obsidian', 'obsidian.json'),\n    os.path.join(HOME, '.config', 'obsidian', 'obsidian.json'),\n    os.path.join(HOME, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'obsidian.json'),\n    os.path.join(HOME, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'obsidian.json'),\n]\nSKIP_DIRS = {'.obsidian', '.trash', '.git', 'node_modules', '.stfolder', '.stversions'}\nHEAD_BYTES = 3000\nBAD_NAME = re.compile(r'[\\\\/:*?\"<>|#^\\[\\]\\x00-\\x1f]')\n\n\ndef read_msg():\n    raw = sys.stdin.buffer.read(4)\n    if len(raw) < 4:\n        return None\n    n = struct.unpack('=I', raw)[0]\n    return json.loads(sys.stdin.buffer.read(n).decode('utf-8'))\n\n\ndef send(obj):\n    data = json.dumps(obj, ensure_ascii=False).encode('utf-8')\n    sys.stdout.buffer.write(struct.pack('=I', len(data)))\n    sys.stdout.buffer.write(data)\n    sys.stdout.buffer.flush()\n\n\ndef load_state():\n    try:\n        with open(STATE, encoding='utf-8') as f:\n            s = json.load(f)\n    except (OSError, ValueError):\n        s = {}\n    s.setdefault('notes', {})\n    s.setdefault('folders', {})\n    s.setdefault('last', None)\n    return s\n\n\ndef save_state(s):\n    tmp = STATE + '.tmp'\n    with open(tmp, 'w', encoding='utf-8') as f:\n        json.dump(s, f, ensure_ascii=False, indent=1)\n    os.replace(tmp, STATE)\n\n\ndef vaults():\n    \"\"\"Every vault Obsidian knows on this computer that still exists, by name.\"\"\"\n    for p in OBSIDIAN_JSON:\n        try:\n            with open(p, encoding='utf-8') as f:\n                data = json.load(f)\n        except (OSError, ValueError):\n            continue\n        out = {}\n        for v in (data.get('vaults') or {}).values():\n            path = v.get('path')\n            if path and os.path.isdir(path):\n                out[os.path.basename(path.rstrip('/'))] = path\n        return out\n    return {}\n\n\ndef walk_notes(root):\n    for d, dirs, files in os.walk(root):\n        dirs[:] = [x for x in dirs if x not in SKIP_DIRS and not x.startswith('.')]\n        for f in files:\n            if f.endswith('.md'):\n                yield os.path.join(d, f)\n\n\ndef frontmatter(text):\n    if not text.startswith('---'):\n        return None\n    end = text.find('\\n---', 3)\n    return text[3:end] if end > 0 else None\n\n\ndef note_is_for(path, vid):\n    \"\"\"True when the note's properties name this video (url, source or any key).\"\"\"\n    try:\n        with open(path, 'rb') as f:\n            head = f.read(HEAD_BYTES).decode('utf-8', 'ignore')\n    except OSError:\n        return False\n    fm = frontmatter(head)\n    if not fm or vid not in fm:\n        return False\n    return re.search(r'(?:youtube\\.com/(?:watch\\?(?:[^\\s)\"]*&)?v=|shorts/|live/|embed/)|youtu\\.be/)' + re.escape(vid) + r'(?![\\w-])', fm) is not None\n\n\ndef find_note(vid, state, only=None):\n    known = state['notes'].get(vid)\n    vs = vaults()\n    if known and known.get('vault') in vs:\n        p = os.path.join(vs[known['vault']], known['path'])\n        if os.path.isfile(p) and note_is_for(p, vid):\n            return known['vault'], known['path']\n    for name, root in vs.items():\n        if only and name != only:\n            continue\n        for p in walk_notes(root):\n            if note_is_for(p, vid):\n                rel = os.path.relpath(p, root)\n                state['notes'][vid] = {'vault': name, 'path': rel}\n                return name, rel\n    return None\n\n\ndef folders(root, depth=3):\n    out = []\n    base = len(root.rstrip('/').split(os.sep))\n    for d, dirs, _ in os.walk(root):\n        dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS and not x.startswith('.'))\n        level = len(d.rstrip('/').split(os.sep)) - base\n        if level >= depth:\n            dirs[:] = []\n        if level > 0:\n            out.append(os.path.relpath(d, root))\n    return out\n\n\ndef label(sec):\n    h, rest = divmod(int(sec), 3600)\n    m, s = divmod(rest, 60)\n    return '%d:%02d:%02d' % (h, m, s) if h else '%d:%02d' % (m, s)\n\n\ndef stamp_re(vid):\n    # a line holding a timestamp of this video, as written here or after the\n    # plugin pointed it at the downloaded file\n    return re.compile(r'^\\s*- (?:\\[\\d[\\d:]*\\]\\(https://youtu\\.be/' + re.escape(vid) + r'\\?t=(\\d+)\\)|\\[\\[[^\\]|]*#t=(\\d+)\\|\\d[\\d:]*\\]\\])')\n\n\ndef insert_line(text, vid, sec, line):\n    lines = text.split('\\n')\n    start = 0\n    if lines and lines[0].strip() == '---':\n        for i in range(1, len(lines)):\n            if lines[i].strip() == '---':\n                start = i + 1\n                break\n    rx = stamp_re(vid)\n    stamps = []\n    for i in range(start, len(lines)):\n        m = rx.match(lines[i])\n        if m:\n            stamps.append((i, int(m.group(1) or m.group(2))))\n    if stamps:\n        # in time order among this video's lines\n        after = [i for i, t in stamps if t <= sec]\n        at = (after[-1] + 1) if after else stamps[0][0]\n        lines[at:at] = [line]\n        return '\\n'.join(lines)\n    # none yet: at the top of the body, after the embeds and drive links there\n    i = start\n    while i < len(lines) and (not lines[i].strip() or lines[i].startswith('![') or lines[i].startswith('[4T-HDD')):\n        i += 1\n    j = i\n    while j > start and not lines[j - 1].strip():\n        j -= 1\n    block = ([''] if j > start else []) + [line] + ([''] if i < len(lines) else [])\n    lines[j:i] = block\n    out = '\\n'.join(lines)\n    return out if out.endswith('\\n') else out + '\\n'\n\n\ndef safe_name(title, vid):\n    name = BAD_NAME.sub(' ', title or '').strip().strip('.')\n    name = re.sub(r'\\s+', ' ', name)[:150].strip()\n    return name or ('YouTube ' + vid)\n\n\ndef create_note(root, folder, vid, title, url):\n    folder = (folder or '').strip().strip('/')\n    d = os.path.join(root, folder) if folder else root\n    os.makedirs(d, exist_ok=True)\n    name = safe_name(title, vid)\n    p = os.path.join(d, name + '.md')\n    if os.path.exists(p):\n        p = os.path.join(d, '%s (%s).md' % (name, vid))\n    created = time.strftime('%Y-%m-%dT%H:%M:%S')\n    with open(p, 'w', encoding='utf-8') as f:\n        f.write('---\\nurl: \"[Link](%s)\"\\ncreated: %s\\n---\\n' % (url, created))\n    return os.path.relpath(p, root)\n\n\ndef add(msg, state):\n    vid = msg['videoId']\n    vs = vaults()\n    vault, rel = msg.get('vault'), msg.get('path')\n    made = False\n    if not (vault and rel):\n        # \"create\" comes after a search that found nothing, so none is repeated\n        hit = None if msg.get('create') else find_note(vid, state)\n        if hit:\n            vault, rel = hit\n        elif msg.get('create') and vault in vs:\n            rel = create_note(vs[vault], msg.get('folder'), vid, msg.get('title'), 'https://www.youtube.com/watch?v=' + vid)\n            made = True\n            state['folders'][vault] = (msg.get('folder') or '').strip().strip('/')\n        else:\n            return {'need': 'place', 'vaults': sorted(vs), 'last': state['last'], 'folders': state['folders']}\n    if vault not in vs:\n        return {'error': 'The vault \"%s\" is not in Obsidian\\'s vault list on this computer.' % vault}\n    p = os.path.join(vs[vault], rel)\n    sec = int(msg.get('seconds') or 0)\n    text = re.sub(r'\\s+', ' ', msg.get('text') or '').strip()\n    line = '- [%s](https://youtu.be/%s?t=%d)%s' % (label(sec), vid, sec, (' ' + text) if text else '')\n    with open(p, encoding='utf-8') as f:\n        body = f.read()\n    with open(p, 'w', encoding='utf-8') as f:\n        f.write(insert_line(body, vid, sec, line))\n    state['notes'][vid] = {'vault': vault, 'path': rel}\n    state['last'] = vault\n    return {'ok': True, 'vault': vault, 'note': os.path.splitext(os.path.basename(rel))[0], 'created': made, 'label': label(sec)}\n\n\ndef handle(msg, state):\n    t = msg.get('type')\n    if t == 'ping':\n        return {'ok': True, 'python': sys.version.split()[0], 'vaults': len(vaults())}\n    if t == 'find':\n        hit = find_note(msg['videoId'], state)\n        if hit:\n            return {'found': True, 'vault': hit[0], 'path': hit[1], 'note': os.path.splitext(os.path.basename(hit[1]))[0]}\n        return {'found': False, 'vaults': sorted(vaults()), 'last': state['last'], 'folders': state['folders']}\n    if t == 'folders':\n        root = vaults().get(msg.get('vault'))\n        return {'folders': folders(root) if root else []}\n    if t == 'add':\n        return add(msg, state)\n    return {'error': 'Unknown request: %s' % t}\n\n\ndef main():\n    msg = read_msg()\n    if msg is None:\n        return\n    state = load_state()\n    try:\n        res = handle(msg, state)\n        save_state(state)\n    except Exception as e:  # report, never die silently\n        res = {'error': '%s: %s' % (type(e).__name__, e)}\n    send(res)\n\n\nif __name__ == '__main__':\n    main()\n",
+ "manifest.json": "{\n  \"manifest_version\": 3,\n  \"name\": \"ARCH YouTube Notes\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Timestamp notes on a YouTube video straight into its Obsidian note: Cmd+K saves the moment, Cmd+Shift+K saves it with a line you type. Written by the Obsidian plugin ARCH After Clipping.\",\n  \"key\": \"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn8nSScQ3jgTTnIvd+zomV4Pt9y/LEoLVgfOJ1GZGpljLn6B24AbljawiEG0Bx5gWZdu8vqDvIWKU/PgeRwOPcFsoVzeqBMxwE+z23e8xdIyFpB9LTM44qYNiWZPrI4bjd118x00+R7ABLtKAqbQ3PniabEP3iklS6IEky+ny+F47nKJHM5rW5CwYYIzMhplbEGg0TNMo3iJz9JjTGfOs1Dvx3DAsTCw0tOFI1PJAWA2Ykf/rgA5o3agd/f9VOQij9NjFvZuc7w5rcHT8RCMZl3CxqIc/LuceYl5h0AK30yV8/h7sSAcknEYTL/dbZSc8MAKExwAziuwmJhkhf6CF3wIDAQAB\",\n  \"permissions\": [\"nativeMessaging\", \"storage\"],\n  \"background\": { \"service_worker\": \"background.js\" },\n  \"content_scripts\": [\n    {\n      \"matches\": [\"https://www.youtube.com/*\", \"https://m.youtube.com/*\"],\n      \"js\": [\"content.js\"],\n      \"run_at\": \"document_start\"\n    }\n  ],\n  \"options_ui\": { \"page\": \"options.html\", \"open_in_tab\": false }\n}\n",
+ "options.html": "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>ARCH YouTube Notes</title>\n<style>\n  body { font: 14px/1.5 system-ui, -apple-system, \"Segoe UI\", sans-serif; margin: 16px; min-width: 420px; color: #222; background: #fff; }\n  @media (prefers-color-scheme: dark) { body { color: #eee; background: #292a2d; } .muted { color: #aaa !important; } button { color: #eee; } }\n  h2 { font-size: 15px; margin: 18px 0 8px; }\n  .row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }\n  .row span { flex: 1; }\n  button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid #888; background: transparent; cursor: pointer; min-width: 150px; }\n  button.recording { border-color: #1a73e8; color: #1a73e8; }\n  .muted { color: #666; font-size: 13px; }\n  #check-result { white-space: pre-wrap; margin-top: 8px; }\n  .bad { color: #d93025; }\n  .good { color: #188038; }\n</style>\n</head>\n<body>\n  <h2>Hotkeys on YouTube</h2>\n  <div class=\"row\"><span>Save the Moment</span><button id=\"bare\"></button></div>\n  <div class=\"row\"><span>Save the Moment With a Line</span><button id=\"typed\"></button></div>\n  <div class=\"row\"><span class=\"muted\">Click a hotkey, then press the new keys. They work on YouTube pages only.</span><button id=\"reset\">Restore Defaults</button></div>\n\n  <h2>Helper</h2>\n  <div class=\"row\"><span class=\"muted\">The helper is the program that writes into your vaults. ARCH After Clipping installs it.</span><button id=\"check\">Check the Helper</button></div>\n  <div id=\"check-result\"></div>\n  <script src=\"options.js\"></script>\n</body>\n</html>\n",
+ "options.js": "// Written by ARCH After Clipping. Edits here are overwritten when the plugin\n// updates the extension; change youtube-notes/ in the plugin's repository.\n'use strict';\n\nconst IS_MAC = /Mac/i.test(navigator.platform);\nconst DEFAULT_KEYS = {\n  bare: { code: 'KeyK', meta: IS_MAC, ctrl: false, alt: !IS_MAC, shift: false },\n  typed: { code: 'KeyK', meta: IS_MAC, ctrl: false, alt: !IS_MAC, shift: true },\n};\nlet keys = DEFAULT_KEYS;\n\nfunction show(k) {\n  const parts = [];\n  if (k.ctrl) parts.push(IS_MAC ? 'Control' : 'Ctrl');\n  if (k.alt) parts.push(IS_MAC ? 'Option' : 'Alt');\n  if (k.shift) parts.push('Shift');\n  if (k.meta) parts.push(IS_MAC ? 'Cmd' : 'Meta');\n  parts.push(k.code.replace(/^Key|^Digit/, ''));\n  return parts.join(' + ');\n}\n\nfunction draw() {\n  for (const id of ['bare', 'typed']) {\n    const b = document.getElementById(id);\n    b.textContent = show(keys[id]);\n    b.classList.remove('recording');\n  }\n}\n\nfor (const id of ['bare', 'typed']) {\n  document.getElementById(id).onclick = (ev) => {\n    const b = ev.currentTarget;\n    b.textContent = 'Press the keys…';\n    b.classList.add('recording');\n    const take = (e) => {\n      if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) return; // wait for the key itself\n      e.preventDefault();\n      window.removeEventListener('keydown', take, true);\n      if (e.key === 'Escape') return draw();\n      if (!e.metaKey && !e.ctrlKey && !e.altKey) {\n        b.textContent = 'Needs Cmd, Ctrl or Option';\n        setTimeout(draw, 1500);\n        return;\n      }\n      keys = Object.assign({}, keys, { [id]: { code: e.code, meta: e.metaKey, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey } });\n      chrome.storage.sync.set({ keys }, draw);\n    };\n    window.addEventListener('keydown', take, true);\n  };\n}\n\ndocument.getElementById('reset').onclick = () => {\n  keys = DEFAULT_KEYS;\n  chrome.storage.sync.remove('keys', draw);\n};\n\ndocument.getElementById('check').onclick = () => {\n  const out = document.getElementById('check-result');\n  out.className = '';\n  out.textContent = 'Checking…';\n  chrome.runtime.sendNativeMessage('com.hoanganh.arch_youtube_notes', { type: 'ping' }, (r) => {\n    const err = chrome.runtime.lastError;\n    if (err || !r || !r.ok) {\n      out.className = 'bad';\n      out.textContent = `The helper did not answer: ${err ? err.message : (r && r.error) || 'no answer'}.\\n`\n        + 'Nothing can be saved until it does. To fix it: in Obsidian, run the command \"Set Up YouTube Notes From Chrome\" '\n        + '(ARCH After Clipping), then press this extension\\'s reload arrow in chrome://extensions and click Check the Helper again.';\n      return;\n    }\n    out.className = 'good';\n    out.textContent = `The helper works: Python ${r.python}, ${r.vaults} vault${r.vaults === 1 ? '' : 's'} found.`\n      + (r.vaults ? '' : ' Open Obsidian once so it lists its vaults.');\n  });\n};\n\nchrome.storage.sync.get('keys', (r) => { if (r && r.keys) keys = r.keys; draw(); });\n"
+};
+// END YOUTUBE_NOTES_FILES

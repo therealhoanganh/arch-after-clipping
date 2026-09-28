@@ -10,3 +10,4 @@ node_modules/
 
 # Local Claude Code settings (machine-specific)
 .claude/settings.local.json
+__pycache__/

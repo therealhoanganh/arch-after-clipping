@@ -103,6 +103,14 @@ Add your own by dropping a `.py` file into `transformers/` and adding a rule tha
 | Restore the Bundled Transformer Scripts | asks first, then rewrites `gemini_chat.py` and `reddit_thread.py` from the copies inside `main.js` |
 | Set Up External Tools (yt-dlp, ffmpeg, Python) | reports tool paths and versions, fills in the settings, installs what is missing |
 | Inspect This Note (What After Clipping Sees) | what the plugin sees in the current note |
+| Set Up YouTube Notes From Chrome | writes the Chrome extension and its helper, registers the helper with Chrome, and says what is still missing |
+| Point YouTube Timestamps at the Downloaded Video | turns this note's `[12:34](https://youtu.be/…?t=754)` lines into `[[video.webm#t=754\|12:34]]` once the video is downloaded |
+
+## YouTube notes from Chrome
+
+Take timestamp notes on a YouTube video while it plays, straight into its note in Obsidian. On a YouTube page in Chrome, **Cmd + K** (Alt + K elsewhere) saves the moment as `- [12:34](https://youtu.be/ID?t=754)`, and **Cmd + Shift + K** pauses the video and asks for a line to go with it. The first note on a video asks which vault it goes to and a folder for the new note, unless some vault already has a note for that video, in which case the lines go there. Lines are kept in time order near the top of the note. Once the video is downloaded into the vault (by this plugin, ARCH YT Playlists or by hand), the timestamps are pointed at the file, which Media Extended opens at that moment.
+
+Two parts do the work: a small Chrome extension, ARCH YouTube Notes, and a helper program that writes into the vault, so Obsidian does not need to be open. **Set Up** (in the settings, or the command) writes both and checks them. Loading the extension is one step by hand: in Chrome, open `chrome://extensions`, switch on Developer mode, click *Load unpacked* and choose the folder Set Up names (*Show Folder* opens it). The extension's options page changes the hotkeys and checks the helper. Chrome only; the helper needs Python 3.
 
 ## Things that will surprise you
 

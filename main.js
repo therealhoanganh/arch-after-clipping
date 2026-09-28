@@ -247,6 +247,8 @@ const DEFAULT_SETTINGS = {
   // 'en.*' matches en, en-US, en-GB and en-orig, so yt-dlp writes one file
   // per variant. Keep the best and delete the rest.
   keepOneSubtitle: true,
+  // Extra languages kept when a video is spoken in them (see pickSubtitles).
+  alsoSubtitleLangs: 'vi',
 
   setupDone: false,
 };
@@ -296,6 +298,102 @@ function existingLabel(value) {
 
 function joinLabels(labels) {
   return Object.entries(labels || {}).map(([k, v]) => `${k}=${v}`).join(', ');
+}
+
+// ---- Subtitle choice. Copied word for word from ARCH YT Playlists'
+// lib/subtitles.js (2026-09-28); change the two together.
+
+// Which subtitle tracks to ask yt-dlp for, and which of the files it writes to
+// keep. Pure functions, shared by the transcript (lib/archiver.js) and the
+// sidecars saved with a video (main.js's pruneSubtitles).
+//
+// Two settings drive it. `subtitleLangs` is the main language pattern
+// ("en.*"). `alsoSubtitleLangs` names extra languages ("vi") whose track is
+// kept only when it is real, because YouTube offers an auto-translation into
+// almost any language on almost any video: an English video comes back with
+// en, en-orig and a machine-translated vi.
+//
+// The spoken language is the one with an "-orig" track. YouTube writes
+// "<lang>-orig" only for the language its speech recognition heard, never for a
+// translation (checked 2026-09-28: an English video gave en, en-orig, vi; a
+// Vietnamese one gave en, vi, vi-orig). So an extra language is kept when it is
+// the spoken one, and the transcript is taken in the spoken language whenever
+// that is the main or an extra language.
+//
+// Known weakness: a hand-made Vietnamese track on an English video is named
+// "vi" like the auto-translation and is dropped with it. Telling them apart
+// needs the video's JSON (`subtitles` against `automatic_captions`), which the
+// download path does not have.
+
+function baseLang(settings) {
+  return String((settings && settings.subtitleLangs) || 'en').replace(/[.*].*$/, '').toLowerCase() || 'en';
+}
+
+function extraLangs(settings) {
+  return String((settings && settings.alsoSubtitleLangs) || '')
+    .split(/[\s,]+/)
+    .map((l) => l.replace(/[.*].*$/, '').toLowerCase())
+    .filter(Boolean);
+}
+
+// The --sub-langs value: the main pattern, plus each extra language and its
+// "-orig" track. Only the plain code is asked for, not "vi.*", so regional
+// variants of a translation are not fetched as well.
+function subLangsArg(settings) {
+  const main = (settings && settings.subtitleLangs) || 'en.*';
+  const extra = extraLangs(settings).flatMap((l) => [l, `${l}-orig`]);
+  return [main, ...extra].join(',');
+}
+
+function spokenLang(tracks) {
+  const orig = tracks.find((t) => /-orig$/i.test(t.lang));
+  return orig ? orig.lang.toLowerCase().replace(/-orig$/, '') : '';
+}
+
+// Lower is better. The plain code beats a regional variant, and the plain code
+// beats "-orig": when a creator uploaded captions, the plain code is theirs.
+function rankFor(lang, target) {
+  const l = lang.toLowerCase();
+  if (l === target) return 0;
+  if (l === `${target}-orig`) return 1;
+  if (l.startsWith(`${target}-`)) return 2;
+  return 3;
+}
+
+function bestIn(tracks, target) {
+  const hits = tracks
+    .filter((t) => rankFor(t.lang, target) < 3)
+    .sort((a, b) => rankFor(a.lang, target) - rankFor(b.lang, target) || a.lang.localeCompare(b.lang));
+  return hits[0] || null;
+}
+
+/**
+ * tracks: [{ lang, ... }] as written for one video.
+ * Returns { keep: [...tracks], transcript: track|null }.
+ */
+function pickSubtitles(tracks, settings) {
+  if (!tracks.length) return { keep: [], transcript: null };
+  const base = baseLang(settings);
+  const extras = extraLangs(settings);
+  const spoken = spokenLang(tracks);
+
+  let main = bestIn(tracks, base);
+  if (!main) {
+    // No track in the main language: keep what the old single-track rule kept,
+    // the first by rank and then by name.
+    main = tracks
+      .slice()
+      .sort((a, b) => rankFor(a.lang, base) - rankFor(b.lang, base) || a.lang.localeCompare(b.lang))[0];
+  }
+  const keep = [main];
+  for (const x of extras) {
+    if (x !== spoken) continue;
+    const t = bestIn(tracks, x);
+    if (t && !keep.includes(t)) keep.push(t);
+  }
+  let transcript = main;
+  if (spoken && spoken !== base && extras.includes(spoken)) transcript = bestIn(tracks, spoken) || main;
+  return { keep, transcript };
 }
 
 function sanitizeName(name) {
@@ -2642,7 +2740,7 @@ module.exports = class ClipArchiver extends Plugin {
       if (this.settings.downloadSubtitles) {
         args.push(
           '--write-auto-subs', '--write-subs',
-          '--sub-langs', this.settings.subtitleLangs || 'en.*',
+          '--sub-langs', subLangsArg(this.settings),
           '--sub-format', 'vtt/best'
         );
         // yt-dlp takes a separate output template per file type, so the
@@ -2698,7 +2796,7 @@ module.exports = class ClipArchiver extends Plugin {
       const out = path.join(folder, this.mediaOutputTemplate(file));
       const args = [
         '--skip-download', '--write-auto-subs', '--write-subs',
-        '--sub-langs', this.settings.subtitleLangs || 'en.*',
+        '--sub-langs', subLangsArg(this.settings),
         '--sub-format', 'vtt/best',
         '-o', out,
       ];
@@ -2708,7 +2806,7 @@ module.exports = class ClipArchiver extends Plugin {
       if (!files.length) return { ok: false, stderr: 'no subtitle file appeared', attempts: r.attempts };
       if (this.settings.keepOneSubtitle) {
         const kept = this.pruneSubtitles(folder, stem);
-        files = kept ? [kept] : files;
+        if (kept.length) files = kept;
       }
       this.log('subtitles saved:', files.join(', '));
       return { ok: true, files, attempts: r.attempts };
@@ -2832,15 +2930,18 @@ module.exports = class ClipArchiver extends Plugin {
   // locally beats fetching the same stream from YouTube a second time.
   // yt-dlp writes one subtitle file per matched language tag, so a --sub-langs
   // of 'en.*' leaves en.vtt, en-US.vtt, en-GB.vtt and en-orig.vtt side by side
-  // for a single video. Ported from ARCH YT Playlists, which hit this first.
-  // Only files matching the video's own stem are considered, so a subtitle a
-  // user put in the folder by hand is never touched.
+  // for a single video, and an extra language ('vi') brings an auto-translation
+  // on almost every video. Ported from ARCH YT Playlists, which hit this first.
+  // What stays is the best main-language track, plus an extra language's track
+  // when the video is spoken in it (pickSubtitles). Only files matching the
+  // video's own stem are considered, so a subtitle a user put in the folder by
+  // hand is never touched. Returns the kept files.
   pruneSubtitles(folder, stem) {
     let entries = [];
     try {
       entries = fs.readdirSync(folder);
     } catch (_) {
-      return null;
+      return [];
     }
     const esc = stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const shape = new RegExp(`^${esc}\\.([A-Za-z0-9_-]+)\\.(vtt|srt|ass)$`, 'i');
@@ -2850,12 +2951,10 @@ module.exports = class ClipArchiver extends Plugin {
       const m = name.match(shape);
       if (m) found.push({ name, lang: m[1], ext: m[2].toLowerCase() });
     }
-    if (found.length < 2) return found[0] ? path.join(folder, found[0].name) : null;
-
-    found.sort((a, b) => this.subtitleRank(a) - this.subtitleRank(b) || a.lang.localeCompare(b.lang));
-    const keep = found[0];
+    const { keep } = pickSubtitles(found, this.settings);
     let removed = 0;
-    for (const f of found.slice(1)) {
+    for (const f of found) {
+      if (keep.includes(f)) continue;
       try {
         fs.unlinkSync(path.join(folder, f.name));
         removed++;
@@ -2863,19 +2962,8 @@ module.exports = class ClipArchiver extends Plugin {
         /* leave it rather than fail the download over a subtitle */
       }
     }
-    this.log(`subtitles: kept ${keep.lang}, removed ${removed} other track(s)`);
-    return path.join(folder, keep.name);
-  }
-
-  // Lower sorts first. A plain language code beats a regional variant, and the
-  // original-language track beats an auto-translation of it.
-  subtitleRank(f) {
-    const lang = f.lang.toLowerCase();
-    const base = (this.settings.subtitleLangs || 'en').replace(/[.*].*$/, '').toLowerCase() || 'en';
-    if (lang === base) return 0;
-    if (lang === `${base}-orig`) return 1;
-    if (lang.startsWith(`${base}-`)) return 2;
-    return 3;
+    if (found.length > 1) this.log(`subtitles: kept ${keep.map((k) => k.lang).join(', ')}, removed ${removed} other track(s)`);
+    return keep.map((k) => path.join(folder, k.name));
   }
 
   async extractAudioFrom(videoPath, folder) {
@@ -5731,7 +5819,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Subtitle Languages')
-      .setDesc('Comma-separated yt-dlp language codes. "en.*" covers English including auto-generated; "en.*,vi.*" adds Vietnamese. Use "all" for every language offered.')
+      .setDesc('Comma-separated yt-dlp language codes. "en.*" covers English including auto-generated. Use "all" for every language offered.')
       .addText((t) =>
         t.setValue(s.subtitleLangs).onChange(async (v) => {
           s.subtitleLangs = v.trim() || 'en.*';
@@ -5740,10 +5828,24 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Keep Only One Subtitle File')
+      .setName('Also Keep Subtitles In')
+      .setDesc(
+        'Language codes, comma-separated. A track in one of these is kept when the video is ' +
+          'spoken in that language. YouTube\u2019s machine translation into these languages is left out. ' +
+          'Empty turns it off.'
+      )
+      .addText((t) =>
+        t.setValue(s.alsoSubtitleLangs || '').onChange(async (v) => {
+          s.alsoSubtitleLangs = v.trim();
+          await this.save();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName('Keep Only the Best Subtitles')
       .setDesc(
         'A language pattern like "en.*" matches en, en-US, en-GB and en-orig, so yt-dlp writes a separate file for each. ' +
-          'This keeps the closest match to the language you asked for and deletes the rest, considering only files named after the video itself. ' +
+          'This keeps the closest match to the main language, plus an Also Keep language when the video is spoken in it, and deletes the rest, considering only files named after the video itself. ' +
           'Turn it off to keep every track.'
       )
       .addToggle((t) =>

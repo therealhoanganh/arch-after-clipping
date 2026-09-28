@@ -6,7 +6,11 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.18.6 — current
+## 1.19.0 — current
+
+**Vietnamese subtitles, when the video is in Vietnamese**, the same change as ARCH YT Playlists 1.9.0, at his request of 2026-09-28: *"can you make this into default setting too? Like download vietnamese subtitle if there is one."* A new setting, *Also Keep Subtitles In*, default `vi`, adds `vi,vi-orig` to `--sub-langs`, and *Keep Only the Best Subtitles* (renamed from *Keep Only One Subtitle File*) keeps the Vietnamese track only when the video is spoken in Vietnamese, which YouTube marks with a `vi-orig` track; the machine translation it offers on English videos is deleted with the other extras. The choice (`subLangsArg`, `pickSubtitles` and helpers) is copied word for word from YT Playlists' `lib/subtitles.js`; change the two together. The *Subtitle Languages* description no longer suggests `en.*,vi.*`, which fetched those machine translations.
+
+## 1.18.6
 
 Fixes YouTube thumbnails left as web addresses. He asked on 2026-09-27: *"My Arch After
 Clipping doesn't auto download image anymore, can you check?"* Fourteen YouTube clips from

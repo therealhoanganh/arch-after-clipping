@@ -6,7 +6,12 @@ Version lives in `manifest.json` — Obsidian reads it from there and shows it i
 > **Numbering.** `1.0.0` is the first release meant for anyone other than its author. Everything before it was development and is numbered `0.1.0` upward in the order it happened, with no entries dropped or merged. Those versions were renumbered twice on the way here, so any number you see in an old console log or screenshot will not match this file.
 
 
-## 1.22.0 — current
+## 1.22.1 — current
+
+- **A video title's colon becomes " - " when the note is renamed from it** (`Lecture 3: Markets` is `Lecture 3 - Markets`), and a colon inside a word becomes "-". It became "_" before. His rule for every ARCH plugin, 2026-10-02: *"Fix it, we need will need to find what games got ":" replace with blank space too, this need to be a universal rule too too!"* (Recreations 0.4.4 has the whole account.)
+- **A note already renamed the old way stays as it is.** Processing runs again on a note it has seen, and the subtitles and drive video are found by the note's name, so `renameNoteTo` leaves a note whose name is the old rule's (`legacySanitizeName`). No note was renamed.
+
+## 1.22.0
 
 **The note opens in Obsidian, and the vault with it.** His words after using 1.21.0: *"Ok so the plugin did work but it not auto open vault and auto open not even when vault is open."* The helper wrote the file and nothing more, so a closed vault stayed closed and After Clipping never finished the clip there.
 

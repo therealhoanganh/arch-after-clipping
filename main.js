@@ -400,8 +400,18 @@ function pickSubtitles(tracks, settings) {
   return { keep, transcript };
 }
 
+// A title's colon becomes " - ", as Radarr writes it ("Lecture 3: Markets" is
+// "Lecture 3 - Markets"); a colon inside a word becomes "-". His rule for every ARCH
+// plugin, 2026-10-02 (*"this need to be a universal rule"*).
+const colonRule = (s) => String(s || '').replace(/\s*:\s+/g, ' - ').replace(/:/g, '-');
+// Before 1.22.1 a colon became "_"; legacySanitizeName is that name, so a note already
+// renamed under it is not renamed again (its subtitles are found by the note's name).
+function legacySanitizeName(name) {
+  return sanitizeName(String(name || '').replace(/:/g, '_'));
+}
+
 function sanitizeName(name) {
-  return String(name || '')
+  return colonRule(name)
     .replace(/[\\/:*?"<>|#^[\]]/g, '_')
     .replace(/\s+/g, ' ')
     .replace(/^[.\s]+|[.\s]+$/g, '')
@@ -3748,7 +3758,7 @@ module.exports = class ClipArchiver extends Plugin {
   async renameNoteTo(file, rawName) {
     try {
       const stem = sanitizeName(rawName);
-      if (!stem || stem === file.basename) return;
+      if (!stem || stem === file.basename || legacySanitizeName(rawName) === file.basename) return;
       const folder = file.parent ? file.parent.path : '';
       const dest = await this.uniquePath(folder, stem + '.md');
       // fileManager.renameFile updates every link pointing at this note;

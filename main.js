@@ -1407,7 +1407,7 @@ module.exports = class ClipArchiver extends Plugin {
     return { place: 'drive', drive, mounted, fallback: false };
   }
 
-  // Media Extended 4.2.1 loads a video's subtitles from its library note: a
+  // Media Extended (4.2.1, and 4.2.7 since 2026-10-04) loads a video's subtitles from its library note: a
   // note with an mx-uid, `video: <file URL>` and `subtitles: ["[[<vault
   // .vtt>#lang=en]]"]`, the form its own Add resources button writes. Written
   // for a video saved on the drive, so its transcript works while the .vtt
@@ -1475,7 +1475,7 @@ module.exports = class ClipArchiver extends Plugin {
   // **Its text must stay the address:** Media Extended 4.2.1 opens a click on a
   // `media`/`video`/`audio` property only when the clicked element's textContent
   // is a URL; replacing the text with the label sent the click to the web
-  // browser (tested 2026-09-24). So the text is hidden by CSS and the label drawn
+  // browser (tested 2026-09-24 on 4.2.1; on 4.2.7 not yet, it needs a drive video). So the text is hidden by CSS and the label drawn
   // by a ::before pseudo-element, which textContent does not include and which
   // leaves the element itself as the click target. Editing and the stored value
   // are untouched. If Obsidian renames those classes the raw address simply shows again.
@@ -1532,13 +1532,15 @@ module.exports = class ClipArchiver extends Plugin {
 
 
   // Videos outside the vault are played by Media Extended, which reads the
-  // file:/// URL in `media`. That was tested on 4.2.1 only, the version Hoang
-  // Anh keeps on purpose ("4.2.5 were bugged from my experience"), so the log
+  // file:/// URL in `media`. That was tested on 4.2.1 (2026-09-24) and on 4.2.7
+  // (2026-10-04, his check in TESTFIELD: "all the clicks and hotkey work"). He
+  // keeps the version frozen on purpose: 4.2.5 failed to load on Obsidian 1.13
+  // (Media Extended issue 670, fixed in 4.2.7), so the log
   // says which version is running. Only playback depends on it: the
   // "already downloaded?" check reads the disk, not Media Extended.
   checkMediaExtended() {
     if (!String(this.settings.externalVideoFolder || '').trim()) return;
-    const TESTED = '4.2.1';
+    const TESTED = '4.2.7';
     const plugins = this.app.plugins || {};
     const mx = plugins.manifests && plugins.manifests['media-extended'];
     const on = !!(plugins.enabledPlugins && plugins.enabledPlugins.has('media-extended'));

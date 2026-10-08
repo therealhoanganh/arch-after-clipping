@@ -249,8 +249,6 @@ const DEFAULT_SETTINGS = {
   // 'en.*' matches en, en-US, en-GB and en-orig, so yt-dlp writes one file
   // per variant. Keep the best and delete the rest.
   keepOneSubtitle: true,
-  // Extra languages kept when a video is spoken in them (see pickSubtitles).
-  alsoSubtitleLangs: 'vi',
 
   setupDone: false,
 };
@@ -303,55 +301,65 @@ function joinLabels(labels) {
 }
 
 // ---- Subtitle choice. Copied word for word from ARCH YT Playlists'
-// lib/subtitles.js (2026-09-28); change the two together.
+// lib/subtitles.js (2026-10-09); change the two together.
 
 // Which subtitle tracks to ask yt-dlp for, and which of the files it writes to
 // keep. Pure functions, shared by the transcript (lib/archiver.js) and the
 // sidecars saved with a video (main.js's pruneSubtitles).
 //
-// Two settings drive it. `subtitleLangs` is the main language pattern
-// ("en.*"). `alsoSubtitleLangs` names extra languages ("vi") whose track is
-// kept only when it is real, because YouTube offers an auto-translation into
-// almost any language on almost any video: an English video comes back with
-// en, en-orig and a machine-translated vi.
+// The rule, his of 2026-10-09 ("Any language"): keep the main language's best
+// track (`subtitleLangs`, English by default), and always keep YouTube's
+// speech-recognition track in the language the video is spoken in, whatever
+// that language is. The transcript is taken in the spoken language.
 //
-// The spoken language is the one with an "-orig" track. YouTube writes
-// "<lang>-orig" only for the language its speech recognition heard, never for a
-// translation (checked 2026-09-28: an English video gave en, en-orig, vi; a
-// Vietnamese one gave en, vi, vi-orig). So an extra language is kept when it is
-// the spoken one, and the transcript is taken in the spoken language whenever
-// that is the main or an extra language.
+// The spoken language is the video's own `language` field, which yt-dlp prints
+// for every video. The "-orig" label alone cannot tell it: on 2026-10-09 a
+// Vietnamese video (4zpeu-XTBAQ, language "vi") offered both vi-orig, the
+// Vietnamese speech, and en-US-orig, an English translation YouTube also labels
+// "Original". Without the field, a lone "-orig" track is taken as the spoken one.
 //
-// Known weakness: only the speech-recognition track of an extra language is
-// fetched, so a hand-made Vietnamese track is never used, on a Vietnamese video
-// or any other. Asking for it means asking for plain "vi", which on most videos
-// is a machine translation that YouTube throttles (see subLangsArg).
+// Only "-orig" tracks are asked for beyond the main pattern, never a plain
+// "vi": plain "vi" on an English video is a machine translation, which YouTube
+// refuses with HTTP 429 (the first download on the PC, 2026-09-28). Before
+// 2026-10-09 an extra language had to be named in `alsoSubtitleLangs`; that
+// setting is no longer read.
 
-function baseLang(settings) {
-  return String((settings && settings.subtitleLangs) || 'en').replace(/[.*].*$/, '').toLowerCase() || 'en';
-}
-
-function extraLangs(settings) {
-  return String((settings && settings.alsoSubtitleLangs) || '')
-    .split(/[\s,]+/)
-    .map((l) => l.replace(/[.*].*$/, '').toLowerCase())
+// Subtitle Languages holds one language. A second one typed after a comma (as
+// iCanStudy's `en.*,vi.*` and Psycho-history's `en.*,vi*.` were) asks YouTube
+// for a machine translation; the spoken-language rule covers what it was meant
+// for. These two split the setting so main.js can keep the first and say so.
+function langEntries(settings) {
+  return String((settings && settings.subtitleLangs) || 'en.*')
+    .split(',')
+    .map((s) => s.trim())
     .filter(Boolean);
 }
 
-// The --sub-langs value: the main pattern, plus the "-orig" track of each
-// extra language. Only "-orig" is asked for: YouTube writes it only for the
-// spoken language, so no translation is ever requested. Asking for plain "vi"
-// made YouTube machine-translate every English video, and it throttles those:
-// the first download on the PC (2026-09-28) failed on "HTTP Error 429" for 'vi'.
-function subLangsArg(settings) {
-  const main = (settings && settings.subtitleLangs) || 'en.*';
-  const extra = extraLangs(settings).map((l) => `${l}-orig`);
-  return [main, ...extra].join(',');
+function mainPattern(settings) {
+  return langEntries(settings)[0] || 'en.*';
 }
 
-function spokenLang(tracks) {
-  const orig = tracks.find((t) => /-orig$/i.test(t.lang));
-  return orig ? orig.lang.toLowerCase().replace(/-orig$/, '') : '';
+function baseLang(settings) {
+  return mainPattern(settings).replace(/[.*].*$/, '').toLowerCase() || 'en';
+}
+
+// The --sub-langs value: the main pattern, plus every "-orig" track.
+function subLangsArg(settings) {
+  return `${mainPattern(settings)},.*-orig`;
+}
+
+// "vi", "en-US" or "" from the video's `language` field; "NA" is yt-dlp's
+// placeholder for a missing field.
+function normLang(language) {
+  const l = String(language || '').trim().toLowerCase();
+  return l && l !== 'na' && l !== 'none' ? l.split(/[-_]/)[0] : '';
+}
+
+function spokenLang(tracks, language) {
+  const fromField = normLang(language);
+  if (fromField) return fromField;
+  const orig = tracks.filter((t) => /-orig$/i.test(t.lang));
+  return orig.length === 1 ? orig[0].lang.toLowerCase().replace(/-orig$/, '').split('-')[0] : '';
 }
 
 // Lower is better. The plain code beats a regional variant, and the plain code
@@ -373,30 +381,30 @@ function bestIn(tracks, target) {
 
 /**
  * tracks: [{ lang, ... }] as written for one video.
+ * language: the video's `language` field, when known.
  * Returns { keep: [...tracks], transcript: track|null }.
  */
-function pickSubtitles(tracks, settings) {
+function pickSubtitles(tracks, settings, language) {
   if (!tracks.length) return { keep: [], transcript: null };
   const base = baseLang(settings);
-  const extras = extraLangs(settings);
-  const spoken = spokenLang(tracks);
+  const spoken = spokenLang(tracks, language);
 
   let main = bestIn(tracks, base);
   if (!main) {
-    // No track in the main language: keep what the old single-track rule kept,
-    // the first by rank and then by name.
+    // No track in the main language: keep the first by rank and then by name.
     main = tracks
       .slice()
       .sort((a, b) => rankFor(a.lang, base) - rankFor(b.lang, base) || a.lang.localeCompare(b.lang))[0];
   }
   const keep = [main];
-  for (const x of extras) {
-    if (x !== spoken) continue;
-    const t = bestIn(tracks, x);
-    if (t && !keep.includes(t)) keep.push(t);
-  }
   let transcript = main;
-  if (spoken && spoken !== base && extras.includes(spoken)) transcript = bestIn(tracks, spoken) || main;
+  if (spoken && spoken !== base) {
+    const t = bestIn(tracks, spoken);
+    if (t) {
+      if (!keep.includes(t)) keep.push(t);
+      transcript = t;
+    }
+  }
   return { keep, transcript };
 }
 
@@ -583,6 +591,21 @@ async function runWithConcurrency(tasks, limit) {
 module.exports = class ClipArchiver extends Plugin {
   async onload() {
     await this.loadSettings();
+    // Subtitle Languages holds one language since 2026-10-09, as in ARCH YT
+    // Playlists. A second one after a comma asked YouTube for a machine
+    // translation, which it refuses; the spoken language is now kept by itself.
+    // So the first entry stays, the change is saved, and it is said once.
+    {
+      const parts = langEntries(this.settings);
+      if (parts.length > 1) {
+        const was = this.settings.subtitleLangs;
+        this.settings.subtitleLangs = parts[0];
+        await this.saveData(this.settings);
+        const msg = `Subtitle Languages was "${was}" and is now "${parts[0]}": the track in the language a video is spoken in is kept by itself now.`;
+        this.log(msg);
+        new Notice(`ARCH After Clipping: ${msg}`, 15000);
+      }
+    }
     this.addSettingTab(new ClipArchiverSettingTab(this.app, this));
     this.ensureTransformers();
 
@@ -3130,7 +3153,7 @@ module.exports = class ClipArchiver extends Plugin {
         if (this.settings.downloadSubtitles && this.settings.keepOneSubtitle) {
           // The stem yt-dlp actually wrote: mediaOutputTemplate doubles % for
           // yt-dlp's own templating, and yt-dlp writes it back as a single %.
-          this.pruneSubtitles(folder, sanitizeName(file.basename));
+          this.pruneSubtitles(folder, sanitizeName(file.basename), r.language);
         }
       }
       return r;
@@ -3181,7 +3204,7 @@ module.exports = class ClipArchiver extends Plugin {
       let files = this.subtitlesNamed(folder, stem);
       if (!files.length) return { ok: false, stderr: 'no subtitle file appeared', attempts: r.attempts };
       if (this.settings.keepOneSubtitle) {
-        const kept = this.pruneSubtitles(folder, stem);
+        const kept = this.pruneSubtitles(folder, stem, r.language);
         if (kept.length) files = kept;
       }
       this.log('subtitles saved:', files.join(', '));
@@ -3306,13 +3329,13 @@ module.exports = class ClipArchiver extends Plugin {
   // locally beats fetching the same stream from YouTube a second time.
   // yt-dlp writes one subtitle file per matched language tag, so a --sub-langs
   // of 'en.*' leaves en.vtt, en-US.vtt, en-GB.vtt and en-orig.vtt side by side
-  // for a single video, and an extra language ('vi') brings an auto-translation
-  // on almost every video. Ported from ARCH YT Playlists, which hit this first.
-  // What stays is the best main-language track, plus an extra language's track
-  // when the video is spoken in it (pickSubtitles). Only files matching the
+  // for a single video, and '.*-orig' brings every track YouTube labels
+  // "Original". Ported from ARCH YT Playlists, which hit this first. What stays
+  // is the best main-language track, plus the track in the language the video
+  // is spoken in, told by its `language` (pickSubtitles). Only files matching the
   // video's own stem are considered, so a subtitle a user put in the folder by
   // hand is never touched. Returns the kept files.
-  pruneSubtitles(folder, stem) {
+  pruneSubtitles(folder, stem, language) {
     let entries = [];
     try {
       entries = fs.readdirSync(folder);
@@ -3327,7 +3350,7 @@ module.exports = class ClipArchiver extends Plugin {
       const m = name.match(shape);
       if (m) found.push({ name, lang: m[1], ext: m[2].toLowerCase() });
     }
-    const { keep } = pickSubtitles(found, this.settings);
+    const { keep } = pickSubtitles(found, this.settings, language);
     let removed = 0;
     for (const f of found) {
       if (keep.includes(f)) continue;
@@ -3522,6 +3545,10 @@ module.exports = class ClipArchiver extends Plugin {
         '--print-to-file',
         'after_move:filepath',
         printFile,
+        // The video's language, for the subtitle rule (pickSubtitles).
+        '--print-to-file',
+        'video:%(language)s',
+        `${printFile}.lang`,
         url,
       ];
 
@@ -3540,9 +3567,17 @@ module.exports = class ClipArchiver extends Plugin {
           /* not fatal, we just won't be able to link the file */
         }
         this.safeUnlink(printFile);
-        return { ok: true, files, attempts: i + 1, usedStep: step.label };
+        let language = '';
+        try {
+          language = fs.readFileSync(`${printFile}.lang`, 'utf8').split('\n').map((s) => s.trim()).filter(Boolean)[0] || '';
+        } catch (_) {
+          /* no language printed: the rule falls back to a lone "-orig" track */
+        }
+        this.safeUnlink(`${printFile}.lang`);
+        return { ok: true, files, language, attempts: i + 1, usedStep: step.label };
       }
       this.safeUnlink(printFile);
+      this.safeUnlink(`${printFile}.lang`);
     }
 
     return { ok: false, stderr: last.stderr, attempts: ladder.length };
@@ -3576,6 +3611,46 @@ module.exports = class ClipArchiver extends Plugin {
     }
   }
 
+  // Tool paths are synced settings, and the Mac and the PC each fill them in
+  // with their own: on 2026-10-09 TESTFIELD's ffmpeg and CHAOS's yt-dlp were the
+  // PC's /home/... paths on the Mac. A saved path that is missing here, or is a
+  // program built for the other system, is passed over and the tool is found by
+  // name on this computer's PATH (buildEnv). Nothing is saved, so the two
+  // computers never overwrite each other. Copied word for word from ARCH YT
+  // Playlists (runsHere, localTool, ytDlpBin); change them together.
+  runsHere(file) {
+    let head;
+    try {
+      const fd = fs.openSync(file, 'r');
+      head = Buffer.alloc(4);
+      fs.readSync(fd, head, 0, 4, 0);
+      fs.closeSync(fd);
+    } catch (_) {
+      return false;
+    }
+    const hex = head.toString('hex');
+    if (hex === '7f454c46') return process.platform === 'linux';
+    if (['cffaedfe', 'feedfacf', 'cafebabe', 'feedface', 'cefaedfe'].includes(hex)) return process.platform === 'darwin';
+    if (hex.startsWith('4d5a')) return process.platform === 'win32';
+    return true; // a script, run by its own interpreter
+  }
+
+  localTool(saved, name) {
+    const p = String(saved || '').trim();
+    if (!p || !path.isAbsolute(p)) return p || name;
+    if (this.runsHere(p)) return p;
+    if (!this._toolWarned) this._toolWarned = new Set();
+    if (!this._toolWarned.has(p)) {
+      this._toolWarned.add(p);
+      this.log(`${name}: the saved path ${p} does not run on this computer; using ${name} from this computer's PATH`);
+    }
+    return name;
+  }
+
+  ytDlpBin() {
+    return this.localTool(this.settings.ytDlpPath, 'yt-dlp');
+  }
+
   buildYtDlpFlags({ cookies = true } = {}) {
     const flags = [];
     if (cookies && this.settings.cookiesFile) {
@@ -3583,8 +3658,9 @@ module.exports = class ClipArchiver extends Plugin {
     } else if (cookies && this.settings.cookiesFromBrowser) {
       flags.push('--cookies-from-browser', this.settings.cookiesFromBrowser);
     }
-    if (this.settings.ffmpegLocation) {
-      flags.push('--ffmpeg-location', this.settings.ffmpegLocation);
+    const ff = String(this.settings.ffmpegLocation || '').trim();
+    if (ff && this.localTool(path.join(ff, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'), 'ffmpeg') !== 'ffmpeg') {
+      flags.push('--ffmpeg-location', ff);
     }
     if (this.settings.noPlaylist) flags.push('--no-playlist');
     // YouTube's signature and n-challenge solving needs the EJS solver script.
@@ -3594,7 +3670,13 @@ module.exports = class ClipArchiver extends Plugin {
     if (this.settings.remoteComponents) {
       flags.push('--remote-components', this.settings.remoteComponents);
     }
-    if (this.settings.jsRuntime) flags.push('--js-runtime', this.settings.jsRuntime);
+    const rt = String(this.settings.jsRuntime || '').trim();
+    if (rt) {
+      const i = rt.indexOf(':');
+      const rtName = i > 0 ? rt.slice(0, i) : rt;
+      const rtPath = i > 0 ? rt.slice(i + 1) : '';
+      flags.push('--js-runtime', rtPath && this.localTool(rtPath, rtName) === rtName ? rtName : rt);
+    }
     const extra = String(this.settings.ytDlpExtraArgs || '').trim();
     if (extra) flags.push(...this.tokenize(extra));
     return flags;
@@ -3612,7 +3694,7 @@ module.exports = class ClipArchiver extends Plugin {
   runYtDlp(args, timeoutMs = 0, opts = {}) {
     const full = [...this.buildYtDlpFlags(opts), ...args];
     this.log('yt-dlp', full.join(' '));
-    return this.runProcess(this.settings.ytDlpPath || 'yt-dlp', full, {
+    return this.runProcess(this.ytDlpBin(), full, {
       timeoutMs,
       maxBuffer: 1024 * 1024 * 32,
     });
@@ -4138,7 +4220,7 @@ module.exports = class ClipArchiver extends Plugin {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-cookies-'));
     const file = path.join(dir, 'cookies.txt');
     try {
-      const r = await this.runProcess(this.settings.ytDlpPath || 'yt-dlp', ['--cookies-from-browser', browser, '--cookies', file, '--quiet', '--no-warnings', 'ytsearch0:cookie-test'], { timeoutMs: 60000 });
+      const r = await this.runProcess(this.ytDlpBin(), ['--cookies-from-browser', browser, '--cookies', file, '--quiet', '--no-warnings', 'ytsearch0:cookie-test'], { timeoutMs: 60000 });
       if (!fs.existsSync(file)) {
         const err = (r.stderr || '').split('\n').map((l) => l.trim()).filter((l) => /ERROR/.test(l)).pop() || 'yt-dlp read no cookies';
         return { ok: false, error: err.replace(/^ERROR:\s*/, '') };
@@ -4445,7 +4527,7 @@ module.exports = class ClipArchiver extends Plugin {
   }
 
   async updateYtDlp() {
-    const bin = this.settings.ytDlpPath || 'yt-dlp';
+    const bin = this.ytDlpBin();
     const notice = new Notice('Updating yt-dlp…', 0);
 
     const run = (cmd, args, timeoutMs = 300000) =>
@@ -6195,24 +6277,14 @@ class ClipArchiverSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Subtitle Languages')
-      .setDesc('Comma-separated yt-dlp language codes. "en.*" covers English including auto-generated. Use "all" for every language offered.')
+      .setDesc(
+        'One language, as a yt-dlp filter. "en.*" covers English including auto-generated. ' +
+          'The track in the language the video is spoken in is always kept as well, whatever ' +
+          'the language.'
+      )
       .addText((t) =>
         t.setValue(s.subtitleLangs).onChange(async (v) => {
           s.subtitleLangs = v.trim() || 'en.*';
-          await this.save();
-        })
-      );
-
-    new Setting(containerEl)
-      .setName('Also Keep Subtitles In')
-      .setDesc(
-        'Language codes, comma-separated. A track in one of these is kept when the video is ' +
-          'spoken in that language. YouTube\u2019s machine translation into these languages is left out. ' +
-          'Empty turns it off.'
-      )
-      .addText((t) =>
-        t.setValue(s.alsoSubtitleLangs || '').onChange(async (v) => {
-          s.alsoSubtitleLangs = v.trim();
           await this.save();
         })
       );

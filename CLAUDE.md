@@ -35,7 +35,7 @@
 
 - Read the note's own text for a new clip, not only the metadata cache. The cache is empty for its first seconds.
 - The create listener is registered after layout-ready, to avoid a storm of popups at startup. Never move it earlier.
-- So `catchUpStartupClips` sweeps for notes younger than `graceSeconds` with a source URL. That catches the clip that launched Obsidian.
+- So `catchUpStartupClips` sweeps for notes younger than `graceSeconds` with a source URL, made on this computer. That catches the clip that launched Obsidian.
 - The processed record is keyed on the source URL, not the note path. It gates the media step only.
 - Images and the transform run again on a re-clip, because delete and clip again is the normal test.
 
@@ -59,7 +59,7 @@
 - Renaming either method or a mode string (`video_and_audio`, `video_only`, `audio_only`, `subs_only`) makes a video quietly download here, into the wrong folder.
 - Subtitle choice is YT Playlists' `lib/subtitles.js`, copied word for word above `sanitizeName`. Change both copies together. It keeps the main language's track and the one in the language the video is spoken in, any language, his rule of Oct 9.
 - Subtitle Languages holds one language. A second one after a comma is dropped on load, saved and announced.
-- `computerName()` and `automaticRunsHere()` are copied word for word into Images Plus.
+- `computerName()` is copied word for word into Images Plus. Its `automaticRunsHere()` was ours until 1.23.0 removed it here.
 
 ### Videos Outside the Vault
 
@@ -95,11 +95,18 @@
 - Test it in a headless Chrome with a throwaway profile, never his Chrome. Load the extension with the DevTools call `Extensions.loadUnpacked`; branded Chrome ignores `--load-extension`.
 - YouTube's Trusted Types block Defuddle injected over DevTools. Test through the extension.
 
-### One Computer Does the Automatic Work
+### The Computer Where It Happened Does the Automatic Work
 
 - Syncthing mirrors the vaults to the PC, so anything automatic would run on both.
-- Any new watcher, interval or startup sweep checks `this.automaticHere()`. Work he starts by hand does not.
-- The delete popup follows him instead: only deletions made in this Obsidian (`watchLocalDeletions`).
+- Every computer runs the automatic work, and each takes only what happened on it. His choice, Oct 14: "Make download on every computer default too, drop the slide down".
+- There is no setting for it. A saved `automaticOn` is not read. Never bring the dropdown back: a clip made on the computer it did not name was never processed.
+- A new note is this computer's when it went through `vault.create` here (`watchLocalCreations`, `createdHere`). A note arriving by sync is written to disk and goes through nothing.
+- A note from the YouTube helper is this computer's when the helper's `state.json` lists it (`helperMade`). It is saved just after the note, so `madeHere` asks twice.
+- `watchLocalCreations` runs in `onload`, before layout-ready, so the clip that launches Obsidian is marked for the startup sweep.
+- Timestamps follow the download only where the linked file resolves. Videos do not sync.
+- A drive queue entry names the computer that queued it (`queueEntriesHere`). The computer without the video must never drop it.
+- Any new watcher, interval or startup sweep needs its own "happened here" test like these. Work he starts by hand needs none.
+- The delete popup works the same way: only deletions made in this Obsidian (`watchLocalDeletions`).
 
 ### Releasing
 
@@ -132,12 +139,14 @@
 - He and a session misread the cumulative lap times and blamed the image download for the rename's time.
 - A history rewrite left tags on old commits, which kept the old author on GitHub for an afternoon.
 - 1.22.0: the first test opened TESTFIELD but not the note, because the plugin had already renamed it.
+- Oct 14: clips made on the PC were never processed. `automaticOn` named the Mac in 12 of 13 vaults, and the Mac's startup sweep skips notes over two minutes old. Fixed in 1.23.0.
 
 ## Where It Stands
 
-- 1.22.3 is current (Oct 9). In `~/Documents` and 12 vaults through BRAT, checked Oct 9. `~/Documents` has 1.22.3, copied in to check the release.
-- The other vaults run 1.22.0 to 1.22.2. BRAT updates each at its next startup.
+- 1.23.0 is current (Oct 15), tested in TESTFIELD on the PC. BRAT updates each vault at its next startup.
+- Before 1.23.0 the vaults ran 1.22.0 to 1.22.3, checked Oct 14.
+- Not yet tested on the Mac: a clip there, and TECHNOS's queued video, which is on the Mac only.
 - TESTFIELD has the symlink. Archive has no BRAT, so no copy.
 - Media Extended 4.2.7 is the tested version (1.22.2). CHAOS, Psycho-history and iCanStudy still run 4.2.1.
 - On 4.2.7 a 4T-HDD video, its property click and a drive timestamp wait for the drive to be plugged in.
-- TESTFIELD's settings: Videos Outside the Vault is `/Volumes/4T-HDD/Media`, `automaticOn` is the MacBook, image labels `banner=Banner, icon=Icon`.
+- TESTFIELD's settings: Videos Outside the Vault is `/Volumes/4T-HDD/Media`, image labels `banner=Banner, icon=Icon`.

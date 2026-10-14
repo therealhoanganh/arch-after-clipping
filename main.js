@@ -21,19 +21,22 @@ const os = require('os');
 const { pathToFileURL } = require('url');
 
 /* ------------------------------------------------------------------ *
- * One computer does the automatic work (1.18.0)
+ * The computer where it happened does the automatic work (1.23.0)
  * ------------------------------------------------------------------ */
 
 // Since 2026-09-25 the vaults are mirrored between the Mac and an Ubuntu PC by
 // Syncthing. A note written on one machine arrives on the other as a new file,
 // so with Obsidian open on both, both would process it: two downloads, two
-// conversions, conflict files. The setting automaticOn names the one computer
-// that runs the automatic work; the settings file syncs, so both machines read
-// the same answer. Commands and menus run anywhere. Shared with ARCH Images
-// Plus, copied word for word.
+// conversions, conflict files. From 1.18.0 to 1.22.3 the setting automaticOn
+// named one computer for all automatic work, and a clip made on the other was
+// never processed (found on the PC, 2026-10-14). Now every computer works, and
+// each takes only what happened on it: a note made in this Obsidian
+// (watchLocalCreations) or by this computer's YouTube helper, a video this
+// computer downloaded. A saved automaticOn is no longer read.
 //
-// The name is macOS's Local Hostname there, because the kernel hostname can
-// change with the network; elsewhere os.hostname().
+// The name labels a drive-queue entry with the computer holding its video.
+// It is macOS's Local Hostname there, because the kernel hostname can change
+// with the network; elsewhere os.hostname().
 function computerName() {
   if (process.platform === 'darwin') {
     try {
@@ -44,13 +47,6 @@ function computerName() {
     } catch (_) {}
   }
   return os.hostname().replace(/\.local$/, '');
-}
-
-// automaticOn: '' is unclaimed (the first computer to load this version claims
-// it), '*' is every computer, anything else one computer's name.
-function automaticRunsHere(settings, here) {
-  const a = String(settings.automaticOn || '');
-  return !a || a === '*' || a === here;
 }
 
 /* ------------------------------------------------------------------ *
@@ -219,10 +215,6 @@ const DEFAULT_SETTINGS = {
   // queued, and moved to the drive once it is back when this is on.
   moveToDriveWhenBack: true,
   driveMoveQueue: [],
-  // The one computer that runs the automatic work (1.18.0): new-note
-  // processing, the startup catch-up, the move of waiting videos to the drive.
-  // '' unclaimed, '*' every computer, else a computer's name.
-  automaticOn: '',
   quality: 'bestvideo*+bestaudio/best',
   audioFormat: 'mp3',
   cookiesFromBrowser: '',
@@ -627,23 +619,23 @@ module.exports = class ClipArchiver extends Plugin {
     // listener already took; it never blocks the listener itself, because
     // deleting a note and clipping it again at the same path is the normal
     // testing loop.
+    //
+    // Only a note made on this computer is processed (1.23.0). The marks are
+    // set from here on, before layout-ready, so a clip that launched Obsidian
+    // is marked too and the sweep can take it.
     this.seenThisSession = new Set();
+    this.watchLocalCreations();
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
         this.app.vault.on('create', (file) => {
-          if (!(file instanceof TFile)) return;
-          if (!this.automaticHere()) {
-            if (file.extension === 'md') this.log(`left alone, automatic work runs on ${this.settings.automaticOn}:`, file.path);
-            return;
-          }
-          this.onFileCreated(file);
+          if (!(file instanceof TFile) || file.extension !== 'md') return;
+          this.madeHere(file).then((here) => {
+            if (here) this.onFileCreated(file);
+            else this.log('left alone, made on another computer (arrived by sync or written outside Obsidian):', file.path);
+          });
         })
       );
-      this.log(
-        this.automaticHere()
-          ? 'watching for new notes'
-          : `not processing new notes here: automatic work runs on ${this.settings.automaticOn}, this is ${this.computer}`
-      );
+      this.log('watching for new notes made on this computer,', this.computer);
       this.watchLocalDeletions();
       this.checkMediaExtended();
       this.watchDriveLabels();
@@ -952,6 +944,61 @@ module.exports = class ClipArchiver extends Plugin {
     return false;
   }
 
+  // Which new notes were made in this Obsidian (1.23.0), the same way as the
+  // deletions. Web Clipper's obsidian://new, the New Note command and other
+  // plugins all go through vault.create; a note arriving by sync is written to
+  // disk and goes through nothing (tested on the PC, 2026-10-14). Marks last
+  // as long as a clip counts as new, so the startup sweep can read them.
+  watchLocalCreations() {
+    this.localCreations = new Map();
+    const vault = this.app.vault;
+    const marks = this.localCreations;
+    const orig = vault.create;
+    if (typeof orig !== 'function') return;
+    let active = true;
+    const wrapper = function (p, ...rest) {
+      if (active && typeof p === 'string') marks.set(normalizePath(p), Date.now());
+      return orig.call(this, p, ...rest);
+    };
+    vault.create = wrapper;
+    this.register(() => {
+      active = false;
+      if (vault.create === wrapper) vault.create = orig;
+    });
+  }
+
+  createdHere(p) {
+    const now = Date.now();
+    const keep = Math.max(60, this.settings.graceSeconds || 0) * 1000;
+    for (const [marked, t] of this.localCreations || []) {
+      if (now - t > keep) this.localCreations.delete(marked);
+    }
+    return (this.localCreations || new Map()).has(p);
+  }
+
+  // The YouTube helper writes its notes straight to disk, so they carry no
+  // mark. Its state.json, beside it outside the synced folders, lists the
+  // notes it wrote on this computer; it is saved just after the note, so a
+  // miss is asked again once.
+  helperMade(p) {
+    try {
+      const s = JSON.parse(fs.readFileSync(path.join(ytnFolder(), 'helper', 'state.json'), 'utf8'));
+      const vault = this.app.vault.getName().normalize('NFC');
+      const want = p.normalize('NFC');
+      return Object.values((s && s.notes) || {}).some((n) =>
+        n && String(n.vault || '').normalize('NFC') === vault && normalizePath(String(n.path || '')).normalize('NFC') === want);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async madeHere(file) {
+    if (this.createdHere(file.path)) return true;
+    if (this.helperMade(file.path)) return true;
+    await new Promise((r) => setTimeout(r, 1500));
+    return this.helperMade(file.path);
+  }
+
   /* ---------------- YouTube notes from Chrome (1.20.0) ---------------- */
 
   // Started by hand. Writes the extension and the helper to ytnFolder(),
@@ -1116,12 +1163,14 @@ module.exports = class ClipArchiver extends Plugin {
   // When a note holding YouTube timestamps gets its download (media set by
   // this plugin, by YT Playlists, or by hand), point the timestamps at the
   // file. Obsidian re-reads notes changed while it was closed at startup,
-  // which fires this too.
+  // which fires this too. Only the computer holding the file does it (1.23.0):
+  // videos do not sync, so the other one finds no file and leaves the note.
   watchYouTubeStamps() {
     this.registerEvent(
       this.app.metadataCache.on('changed', (file, data, cache) => {
         if (!data || data.indexOf('](https://youtu.be/') < 0) return;
-        if (!this.automaticHere()) return;
+        const target = localMediaTarget(cache && cache.frontmatter && cache.frontmatter.media);
+        if (target && !this.app.metadataCache.getFirstLinkpathDest(target, file.path)) return;
         this.pointStampsAtVideo(file, cache, false);
       })
     );
@@ -1184,10 +1233,6 @@ module.exports = class ClipArchiver extends Plugin {
     });
     if (n) say(`Pointed ${n} timestamp${n === 1 ? '' : 's'} at ${target}.`);
     else if (manual) say('No YouTube timestamps of this video in this note.');
-  }
-
-  automaticHere() {
-    return automaticRunsHere(this.settings, this.computer);
   }
 
   async offerDriveMediaDelete() {
@@ -1287,9 +1332,37 @@ module.exports = class ClipArchiver extends Plugin {
     const video = normalizePath(path.relative(base, videoAbs));
     const q = this.settings.driveMoveQueue || (this.settings.driveMoveQueue = []);
     if (q.some((e) => e.video === video)) return;
-    q.push({ note: notePath, video });
+    q.push({ note: notePath, video, computer: this.computer });
     this.saveSettings();
     this.log('queued to move to the drive once it is plugged in:', video);
+  }
+
+  // The queued videos this computer can act on (1.23.0). The queue syncs with
+  // the settings and the videos do not, so the computer without a video would
+  // find it gone and drop it, and the one holding it would never move it. An
+  // entry names the computer that queued it, and only that one acts on it. An
+  // entry from before 1.23.0 has no name: the computer holding its video claims
+  // it, and the others keep it unless its note no longer links the video.
+  queueEntriesHere() {
+    const here = [];
+    for (const e of this.settings.driveMoveQueue || []) {
+      if (e.computer && e.computer !== this.computer) continue;
+      if (this.app.vault.getAbstractFileByPath(e.video) instanceof TFile) {
+        if (!e.computer) e.computer = this.computer;
+        here.push(e);
+      } else if (e.computer === this.computer || !this.noteStillLinks(e)) {
+        here.push(e); // gone: moveVideoToDrive says so and it leaves the queue
+      }
+    }
+    return here;
+  }
+
+  noteStillLinks(e) {
+    const note = this.app.vault.getAbstractFileByPath(e.note || '');
+    if (!(note instanceof TFile)) return false;
+    const media = this.app.metadataCache.getFileCache(note)?.frontmatter?.media;
+    const name = path.posix.basename(e.video);
+    return (Array.isArray(media) ? media : media ? [media] : []).some((v) => String(v).includes(name));
   }
 
   watchDriveQueue() {
@@ -1298,14 +1371,18 @@ module.exports = class ClipArchiver extends Plugin {
   }
 
   async moveQueuedVideos(manual) {
-    const q = this.settings.driveMoveQueue || [];
     if (this.movingToDrive) return;
+    const q = this.queueEntriesHere();
     if (!q.length) {
-      if (manual) new Notice('No video is waiting for the drive.');
+      if (manual) {
+        const elsewhere = (this.settings.driveMoveQueue || []).length;
+        new Notice(elsewhere
+          ? `No video on this computer is waiting for the drive. ${plural(elsewhere, 'video')} queued on the other computer ${elsewhere === 1 ? 'is' : 'are'} moved there.`
+          : 'No video is waiting for the drive.');
+      }
       return;
     }
     if (!manual && !this.settings.moveToDriveWhenBack) return;
-    if (!manual && !this.automaticHere()) return;
     const root = String(this.settings.externalVideoFolder || '').trim();
     if (!root || !driveMounted(root)) {
       if (manual) new Notice(`${plural(q.length, 'video')} ${q.length === 1 ? 'waits' : 'wait'} for ${root ? path.basename(driveOf(root) || root) : 'the drive'}, which is not plugged in.`);
@@ -1782,10 +1859,10 @@ module.exports = class ClipArchiver extends Plugin {
   // Notes that arrived while the plugin was not yet listening. Only a note
   // with a source URL qualifies: the live listener takes any new note because
   // it saw it being born, but here the only evidence is a young file, and a
-  // young file without a URL is a note the user just made by hand.
+  // young file without a URL is a note the user just made by hand. A young
+  // note made on the other computer is left to it (1.23.0).
   async catchUpStartupClips() {
     if (!this.settings.enabled) return;
-    if (!this.automaticHere()) return;
     const cutoff = Date.now() - this.settings.graceSeconds * 1000;
     const young = this.app.vault.getMarkdownFiles().filter((f) => (f.stat?.ctime ?? 0) >= cutoff);
     for (const file of young) {
@@ -1796,6 +1873,10 @@ module.exports = class ClipArchiver extends Plugin {
         this.resolveSourceUrl(this.app.metadataCache.getFileCache(file)?.frontmatter) ||
         this.extractUrlFromRawFrontmatter(content);
       if (!url) continue;
+      if (!this.createdHere(file.path) && !this.helperMade(file.path)) {
+        this.log('young clip left alone at startup, made on another computer:', file.path);
+        continue;
+      }
       this.log('clipped before the plugin was listening, catching up:', file.path);
       this.onFileCreated(file);
     }
@@ -4863,14 +4944,8 @@ module.exports = class ClipArchiver extends Plugin {
     if (!Array.isArray(this.settings.transformRules)) {
       this.settings.transformRules = DEFAULT_SETTINGS.transformRules.map((r) => ({ ...r }));
     }
-    // An unclaimed vault is claimed by the first computer to load this version,
-    // so a vault never runs its automatic work on two computers by default.
+    // Names this computer's entries in the drive queue (1.23.0).
     if (!this.computer) this.computer = computerName();
-    if (!this.settings.automaticOn) {
-      this.settings.automaticOn = this.computer;
-      await this.saveData(this.settings);
-      this.log('automatic work claimed for this computer:', this.computer);
-    }
   }
 
   async saveSettings() {
@@ -4882,7 +4957,7 @@ module.exports = class ClipArchiver extends Plugin {
   // save here would write the old settings back over it.
   async onExternalSettingsChange() {
     await this.loadSettings();
-    this.log('settings changed on disk (the other computer?), reloaded; automatic work runs on', this.settings.automaticOn);
+    this.log('settings changed on disk (the other computer?), reloaded');
   }
 };
 
@@ -5975,7 +6050,7 @@ class ClipArchiverSettingTab extends PluginSettingTab {
       .setDesc(
         'A video saved in the vault only because the drive was not plugged in waits in a queue, and moves to the drive ' +
           'within a minute of it being plugged in. A video you chose to keep in the vault never moves. ' +
-          `Waiting now: ${(s.driveMoveQueue || []).length}.`
+          `Waiting on this computer now: ${this.plugin.queueEntriesHere().length}.`
       )
       .addToggle((t) =>
         t.setValue(s.moveToDriveWhenBack !== false).onChange(async (v) => {
@@ -5983,28 +6058,6 @@ class ClipArchiverSettingTab extends PluginSettingTab {
           await this.save();
         })
       );
-
-    {
-      const here = this.plugin.computer;
-      const cur = s.automaticOn || here;
-      new Setting(containerEl)
-        .setName('Automatic Work Runs On')
-        .setDesc(
-          'The one computer that processes new notes, catches up clips at startup and moves waiting videos to the drive. ' +
-            'The vaults are mirrored between computers, so a note clipped on one arrives on the other as new; with Obsidian open ' +
-            'on both, both would process it. Commands, menus and the delete popup work on every computer. ' +
-            `This computer is ${here}.`
-        )
-        .addDropdown((d) => {
-          d.addOption(here, `${here} (This Computer)`);
-          if (cur !== here && cur !== '*') d.addOption(cur, cur);
-          d.addOption('*', 'Every Computer');
-          d.setValue(cur).onChange(async (v) => {
-            s.automaticOn = v;
-            await this.save();
-          });
-        });
-    }
 
     new Setting(containerEl)
       .setName('Relink Script')

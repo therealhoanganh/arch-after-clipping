@@ -139,7 +139,7 @@
 - He and a session misread the cumulative lap times and blamed the image download for the rename's time.
 - A history rewrite left tags on old commits, which kept the old author on GitHub for an afternoon.
 - 1.22.0: the first test opened TESTFIELD but not the note, because the plugin had already renamed it.
-- Oct 14: clips made on the PC were never processed. `automaticOn` named the Mac in 12 of 13 vaults, and the Mac's startup sweep skips notes over two minutes old. Fixed in 1.23.0.
+- Oct 14: clips made on the PC were never processed. `automaticOn` named the Mac in 13 of 14 vaults, and the Mac's startup sweep skips notes over two minutes old. Fixed in 1.23.0.
 
 ## Where It Stands
 
